@@ -1,0 +1,10 @@
+# ninja log v5
+310	7327	6709578046257157	D:/2021_2/CAPTRA-main/CAPTRA/network/models/pointnet_lib/build/temp.win-amd64-3.6/Release/src/ball_query.obj	88c73d07ef11beae
+0	7488	6709578046366871	D:/2021_2/CAPTRA-main/CAPTRA/network/models/pointnet_lib/build/temp.win-amd64-3.6/Release/src/group_points.obj	995ccbf405b4351f
+428	7610	6709578048431331	D:/2021_2/CAPTRA-main/CAPTRA/network/models/pointnet_lib/build/temp.win-amd64-3.6/Release/src/sampling.obj	562f3f5826e091f0
+193	7700	6709578049089562	D:/2021_2/CAPTRA-main/CAPTRA/network/models/pointnet_lib/build/temp.win-amd64-3.6/Release/src/interpolate.obj	9b3586b70b2d82d2
+369	13831	6709578111323127	D:/2021_2/CAPTRA-main/CAPTRA/network/models/pointnet_lib/build/temp.win-amd64-3.6/Release/src/pointnet2_api.obj	bf66d4399fa870d5
+143	32872	6709578301414677	D:/2021_2/CAPTRA-main/CAPTRA/network/models/pointnet_lib/build/temp.win-amd64-3.6/Release/src/ball_query_gpu.obj	6544105bfd56149a
+62	33030	6709578302082875	D:/2021_2/CAPTRA-main/CAPTRA/network/models/pointnet_lib/build/temp.win-amd64-3.6/Release/src/group_points_gpu.obj	bf536598971d121b
+242	33138	6709578301693927	D:/2021_2/CAPTRA-main/CAPTRA/network/models/pointnet_lib/build/temp.win-amd64-3.6/Release/src/interpolate_gpu.obj	fbd41ef3c7855b70
+491	33267	6709578305493749	D:/2021_2/CAPTRA-main/CAPTRA/network/models/pointnet_lib/build/temp.win-amd64-3.6/Release/src/sampling_gpu.obj	c41771f89209411
