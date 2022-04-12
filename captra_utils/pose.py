@@ -76,3 +76,19 @@ def get_instance_pose(meta, mask, coord, depth, intrinsics, inst_i, opt):
     print(f'pose fit points num {len(pts)}')
     pose = pose_fit(coord_pts, pts)
     return pose
+
+
+def pose2sRt(pose):
+    sRt = np.zeros((4, 4), np.float64)
+    sRt[:3, :3] = pose['rotation']
+    sRt[:3, 3] = pose['translation'].transpose()
+    sRt[3, 3] = 1
+    return sRt
+
+
+def sRT2pose(sRt):
+    pose = {}
+    pose['translation'] = sRt[:3, 3].transpose()
+    pose['rotation'] = sRt[:3, :3]
+    pose['scale'] = 1.0
+    return pose

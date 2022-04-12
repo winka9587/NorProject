@@ -33,7 +33,7 @@ def backproject_points(points_xy, depth, intrinsics, scale=0.001):
     return points_xyz*scale, zero_idx
 
 
-def add_border(mask, inst_id, kernel_size=2):  # enlarge the region w/ 255
+def add_border(mask, inst_id, kernel_size=10):  # enlarge the region w/ 255
     # print((255 - mask).sum())
     output = mask.copy()
     h, w = mask.shape
