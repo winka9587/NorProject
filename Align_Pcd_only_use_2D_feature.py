@@ -3,7 +3,7 @@ from extract_2D_kp import extract_sift_kp_from_RGB
 from file_io import read_scene_imgs
 from utils import pjoin, config, init_logger, backproject_points, add_border
 from visualize import viz_multi_points_diff_color
-from eval import RotMatErr
+from eval import RotMatErr, poseErr
 import cv2
 import sys
 import time
@@ -58,7 +58,7 @@ def extract_sift_feature(arg):
     meta_idx = 0
     for meta in meta_s:
         if meta["obj_name"] == obj_name:
-            instance_id = meta["inst_idx"]
+            instance_id = int(meta["inst_idx"])
             break
         else:
             meta_idx += 1
@@ -91,7 +91,7 @@ def extract_sift_feature(arg):
     #     cv2.waitKey(0)
     # 提取出的rgb图像提取sift特征点
     # color_sift 绘制sift特征点的RGB图像
-    color_sift, kp_xys, des = extract_sift_kp_from_RGB(opt, color_cropped)
+    color_sift, kp_xys, des = extract_sift_kp_from_RGB(color_cropped, opt)
     if arg.vis:
         cv2.imshow("color cut sift", color_sift)
         cv2.waitKey(0)
@@ -139,16 +139,17 @@ def get_sift_error_between_two_frame(prefix_1, prefix_2, opt=None):
         p1 = [kpp.queryIdx for kpp in goodMatch]
         p2 = [kpp.trainIdx for kpp in goodMatch]
 
-        post1 = np.int32([kp1[pp] for pp in p1])
-        post2 = np.int32([kp2[pp] for pp in p2]) + (w1, 0)
+        post1 = np.int32([kp1[pp].pt for pp in p1])
+        post2 = np.int32([kp2[pp].pt for pp in p2]) + (w1, 0)
 
         for (x1, y1), (x2, y2) in zip(post1, post2):
             cv2.line(vis, (x1, y1), (x2, y2), (0, 0, 255))
             points_1.append([x1, y1])
             points_2.append([x2, y2])
         # 可视化sift匹配结果
-        # cv2.namedWindow("match", cv2.WINDOW_NORMAL)
-        # cv2.imshow("match", vis)
+        cv2.namedWindow("match", cv2.WINDOW_NORMAL)
+        cv2.imshow("match", vis)
+        cv2.waitKey(0)
 
         match_points_1 = np.asarray(points_1)
         match_points_2 = np.asarray(points_2)
@@ -216,38 +217,22 @@ def get_sift_error_between_two_frame(prefix_1, prefix_2, opt=None):
                            output_2.inst_id, opt)
     print(f'point1:{point_3d_1.shape}')
     print(f'point2:{point_3d_2.shape}')
-    point_3d_1[:, :] = point_3d_1[:, :] * 0.001
-    point_3d_2[:, :] = point_3d_2[:, :] * 0.001
+
     pose_sift = pose_fit(point_3d_1, point_3d_2)
+    sRt1 = pose2sRt(pose1)
+    sRt2 = pose2sRt(pose2)
+    sRt1_inv = np.linalg.inv(sRt1)
+    sRt12 = np.matmul(sRt2, sRt1_inv)
+    pose12 = sRT2pose(sRt12)
 
-    s12 = pose2['scale']/pose1['scale']
-    t12 = pose2['translation'] - pose1['translation']
-    R12 = np.matmul(pose2['rotation'], pose1['rotation'].transpose())
-    err_t_tmp = pose_sift['translation']-t12
+    pose_err = poseErr(pose12, pose_sift)
 
-    err_t = np.sqrt(np.square(err_t_tmp[0])+np.square(err_t_tmp[1])+np.square(err_t_tmp[2]))
-    err_R_degree = RotMatErr(R12, pose_sift['rotation'])
-    err_s = abs(pose_sift['scale']/(s12))
-
-    print("pose two frame (sift):")
-    print(pose_sift)
-    pose_diff_gt = {}
-    pose_diff_gt['rotation'] = R12
-    pose_diff_gt['scale'] = s12
-    pose_diff_gt['translation'] = t12
-    print("pose_diff_gt:")
-    print(pose_diff_gt)
-    print("pose1:")
-    print(pose1)
-    print("pose2:")
-    print(pose2)
-
-    print(f'err_s: {err_s}')
-    print(f'err_R: {err_R_degree}')
-    print(f'err_t: {err_t}')
+    print('err_s: {}'.format(pose_err['scale']))
+    print('err_R: {}'.format(pose_err['rotation']))
+    print('err_t: {}'.format(pose_err['translation']))
 
     point_3d_2_sift = (np.matmul(pose_sift['rotation'], point_3d_1.transpose()).transpose()) * pose_sift['scale'] + pose_sift['translation'].transpose()
-    point_3d_2_gt = (np.matmul(pose_diff_gt['rotation'], point_3d_1.transpose()).transpose()) * pose_diff_gt['scale'] + pose_diff_gt['translation'].transpose()
+    point_3d_2_gt = (np.matmul(pose12['rotation'], point_3d_1.transpose()).transpose()) * pose12['scale'] + pose12['translation'].transpose()
 
     # viz_multi_points_diff_color("3D kp from two frame",
     #                             [point_3d_2, point_3d_2_gt, point_3d_2_sift],
@@ -256,17 +241,11 @@ def get_sift_error_between_two_frame(prefix_1, prefix_2, opt=None):
     #                             True)
     print('point_3d_1')
     print('point_3d_2')
-    # viz_multi_points_diff_color("green:Frame1 kp, blue:Frame2 kp, red:Frame1 kp use gt to Frame2",
-    #                             [point_3d_1, point_3d_2, point_3d_2_gt, point_3d_2_sift],
-    #                             [color_green, color_blue, color_red, color_purple],
-    #                             False,
-    #                             True)
-    result_err = {}
-    result_err['s'] = err_s
-    result_err['R'] = err_R_degree
-    result_err['t'] = err_t
+    viz_multi_points_diff_color("green:Frame1 kp, blue:Frame2 kp, red:Frame1 kp use gt to Frame2",
+                                [point_3d_1, point_3d_2, point_3d_2_gt, point_3d_2_sift],
+                                [color_green, color_blue, color_red, color_purple])
     print('end')
-    return result_err
+    return pose_err
 
 if __name__ == '__main__':
     opt = config()

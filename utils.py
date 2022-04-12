@@ -27,10 +27,10 @@ def backproject_points(points_xy, depth, intrinsics, scale=0.001):
     points_xyz = np.transpose(points_xyz)
     for i in range(points_xy.shape[0]):
         kp = points_xy[i, :]
-        x = kp[0]
-        y = kp[1]
-        point_depth = depth[y, x].astype(np.float32)
-        points_xyz[i, :] = points_xyz[i, :] * point_depth/point_depth[:, -1:]
+        kp_x = kp[0]
+        kp_y = kp[1]
+        point_depth = depth[kp_y, kp_x].astype(np.float32)
+        points_xyz[i, :] = points_xyz[i, :] * point_depth / points_xyz[i, -1:]
     points_xyz[:, 2] = -points_xyz[:, 2]
     zero_idx = np.where(points_xyz[:, 2] == 0)
     return points_xyz*scale, zero_idx

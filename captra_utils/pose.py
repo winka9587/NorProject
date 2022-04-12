@@ -25,13 +25,14 @@ def get_instance_pose(meta, mask, coord, depth, intrinsics, inst_i, opt):
     # gt_model_numpy = gt_models[inst_model_name]
 
     # 直接加载原obj模型
-    if opt.dataset == "CAMERA":
-        obj_model_path = pjoin(opt.obj_model_path, opt.dataset, opt.mode, meta["model_parent_dir"],
-                               meta["model_name"], 'model.obj')
-    else:
-        obj_model_path = pjoin(opt.obj_model_path, opt.dataset, opt.mode,
-                               meta["model_name"] + '.obj')
-    gt_model_numpy = sample_points_from_mesh(obj_model_path, 2048, fps=True, ratio=3)
+    # obj_model_path = None
+    # if opt.dataset == "CAMERA":
+    #     obj_model_path = pjoin(opt.obj_model_path, opt.dataset, opt.mode, meta["parent_dir"],
+    #                            meta["obj_name"], 'model.obj')
+    # else:
+    #     obj_model_path = pjoin(opt.obj_model_path, opt.dataset, opt.mode,
+    #                            meta["obj_name"] + '.obj')
+    # gt_model_numpy = sample_points_from_mesh(obj_model_path, 2048, fps=True, ratio=3)
     # flip z-axis in CAMERA   # 反转Z轴
     # model_points = model_points * np.array([[1.0, 1.0, -1.0]])
     # gt_models = cPickle.load(obj_model_path)
@@ -80,7 +81,7 @@ def get_instance_pose(meta, mask, coord, depth, intrinsics, inst_i, opt):
 
 def pose2sRt(pose):
     sRt = np.zeros((4, 4), np.float64)
-    sRt[:3, :3] = pose['rotation']
+    sRt[:3, :3] = pose['rotation']*pose['scale']
     sRt[:3, 3] = pose['translation'].transpose()
     sRt[3, 3] = 1
     return sRt
@@ -88,7 +89,7 @@ def pose2sRt(pose):
 
 def sRT2pose(sRt):
     pose = {}
-    pose['translation'] = sRt[:3, 3].transpose()
     pose['rotation'] = sRt[:3, :3]
     pose['scale'] = 1.0
+    pose['translation'] = sRt[:3, 3].reshape(-1, 1)
     return pose
