@@ -126,7 +126,7 @@ def get_sift_error_between_two_frame(prefix_1, prefix_2, opt=None):
     matches = bf.knnMatch(output_1.des, output_2.des, k=2)
 
 
-    def drawMatchesKnn_cv2(img1_gray, kp1, img2_gray, kp2, goodMatch):
+    def drawMatchesKnn_cv2(img1_gray, kp1, img2_gray, kp2, goodMatch, opt):
         points_1 = []
         points_2 = []
         h1, w1 = img1_gray.shape[:2]
@@ -147,9 +147,10 @@ def get_sift_error_between_two_frame(prefix_1, prefix_2, opt=None):
             points_1.append([x1, y1])
             points_2.append([x2, y2])
         # 可视化sift匹配结果
-        cv2.namedWindow("match", cv2.WINDOW_NORMAL)
-        cv2.imshow("match", vis)
-        cv2.waitKey(0)
+        if opt.vis:
+            cv2.namedWindow("match", cv2.WINDOW_NORMAL)
+            cv2.imshow("match", vis)
+            cv2.waitKey(0)
 
         match_points_1 = np.asarray(points_1)
         match_points_2 = np.asarray(points_2)
@@ -161,7 +162,7 @@ def get_sift_error_between_two_frame(prefix_1, prefix_2, opt=None):
             goodMatch.append(m)
 
     # drawMatchesKnn_cv2(output_1.color_sift, output_1.kp, output_2.color_sift, output_2.kp, goodMatch[:20])
-    match1, match2 = drawMatchesKnn_cv2(output_1.color_sift, output_1.kp, output_2.color_sift, output_2.kp, goodMatch[:])
+    match1, match2 = drawMatchesKnn_cv2(output_1.color_sift, output_1.kp, output_2.color_sift, output_2.kp, goodMatch[:], opt)
     print(f'match1:{match1.shape}')
     print(f'match2:{match2.shape}')
 
@@ -249,14 +250,16 @@ def get_sift_error_between_two_frame(prefix_1, prefix_2, opt=None):
     #                             True)
     print('point_3d_1')
     print('point_3d_2')
-    viz_multi_points_diff_color("green:Frame1 kp, blue:Frame2 kp, red:Frame1 kp use gt to Frame2",
-                                [point_3d_1, point_3d_2, point_3d_2_gt, point_3d_2_sift],
-                                [color_green, color_blue, color_red, color_purple])
+    if opt.vis:
+        viz_multi_points_diff_color("green:Frame1 kp, blue:Frame2 kp, red:Frame1 kp use gt to Frame2",
+                                    [point_3d_1, point_3d_2, point_3d_2_gt, point_3d_2_sift],
+                                    [color_green, color_blue, color_red, color_purple])
     print('end')
     return pose_err
 
 if __name__ == '__main__':
     opt = config()
+    opt.vis = False
     root_path = 'M:/PCL/'
     dataset = 'Real'  # Real or CAMERA
     mode = 'train'
@@ -270,25 +273,29 @@ if __name__ == '__main__':
     files = os.listdir(file_path)
     prefixs = [filename[:-10] for filename in files if filename[-10:]=='_color.png']
     avg_err = {}
-    avg_err['s'] = 0
-    avg_err['R'] = 0
-    avg_err['t'] = 0
+    avg_err['scale'] = 0
+    avg_err['rotation'] = 0
+    avg_err['translation'] = 0
     avg_err['count'] = 0
     print(f"prefixs = :\n{prefixs}")
     for i in range(len(prefixs)-1):
         prefix_1 = prefixs[i]
         prefix_2 = prefixs[i+1]
         result_err = get_sift_error_between_two_frame(prefix_1, prefix_2, opt)
-        avg_err['s'] += result_err['s']
-        avg_err['R'] += result_err['R']
-        avg_err['t'] += result_err['t']
+        avg_err['scale'] += result_err['scale']
+        avg_err['rotation'] += result_err['rotation']
+        avg_err['translation'] += result_err['translation']
         avg_err['count'] += 1
 
         logger.info(f'match img {prefix_1}, {prefix_2}')
         logger.info('Error')
-        logger.info('s:{}'.format(result_err['s']))
-        logger.info('R:{}'.format(result_err['R']))
-        logger.info('t:{}'.format(result_err['t']))
+        logger.info('s:{}'.format(result_err['scale']))
+        logger.info('R:{}'.format(result_err['rotation']))
+        logger.info('t:{}'.format(result_err['translation']))
+    logger.info('Final Avg Error')
+    logger.info('avg s:{}'.format(avg_err['scale']/avg_err['count']))
+    logger.info('avg R:{}'.format(avg_err['rotation']/avg_err['count']))
+    logger.info('avg t:{}'.format(avg_err['translation']/avg_err['count']))
 
     # result_err = get_sift_error_between_two_frame('0000', '0001', opt)
 

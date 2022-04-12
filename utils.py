@@ -55,7 +55,7 @@ def config():
     parser.add_argument('--dataset', type=str, default=None, help='')
     parser.add_argument('--mode', type=str, default=None, help='')
     parser.add_argument('--obj_model', type=str, default='M:/PCL/dataset/obj_models_CAPTRA/', help='')
-
+    parser.add_argument('--vis', type=bool, default=False, help='')
     opt = parser.parse_args()
     return opt
 
