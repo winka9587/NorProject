@@ -7,6 +7,10 @@ import math
 def RotMatErr(R1, R2):
     R = np.matmul(R1, R2)
     trace = np.trace(R)
+    if trace > 3:
+        trace = 3
+    if trace < -1:
+        trace = -1
     Rdegree = math.acos((trace-1)/2)
     return abs(Rdegree)
 

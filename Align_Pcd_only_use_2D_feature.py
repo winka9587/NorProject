@@ -227,6 +227,14 @@ def get_sift_error_between_two_frame(prefix_1, prefix_2, opt=None):
 
     pose_err = poseErr(pose12, pose_sift)
 
+    logger.info('============== frame {} and {} =============='.format(prefix_1, prefix_2))
+    logger.info('prefix:{}'.format(prefix_1))
+    logger.info('pose1:\n{}'.format(pose1))
+    logger.info('prefix:{}'.format(prefix_2))
+    logger.info('pose2:\n{}'.format(pose2))
+    logger.info('pose_12:\n{}'.format(pose12))
+    logger.info('pose_sift:\n{}'.format(pose_sift))
+    logger.info('SIFT match Error:\n{}'.format(pose_err))
     print('err_s: {}'.format(pose_err['scale']))
     print('err_R: {}'.format(pose_err['rotation']))
     print('err_t: {}'.format(pose_err['translation']))
@@ -267,21 +275,21 @@ if __name__ == '__main__':
     avg_err['t'] = 0
     avg_err['count'] = 0
     print(f"prefixs = :\n{prefixs}")
-    # for i in range(len(prefixs)-1):
-    #     prefix_1 = prefixs[i]
-    #     prefix_2 = prefixs[i+1]
-    #     result_err = get_sift_error_between_two_frame(prefix_1, prefix_2, opt)
-    #     avg_err['s'] += result_err['s']
-    #     avg_err['R'] += result_err['R']
-    #     avg_err['t'] += result_err['t']
-    #     avg_err['count'] += 1
-    #
-    #     logger.info(f'match img {prefix_1}, {prefix_2}')
-    #     logger.info('Error')
-    #     logger.info('s:{}'.format(result_err['s']))
-    #     logger.info('R:{}'.format(result_err['R']))
-    #     logger.info('t:{}'.format(result_err['t']))
+    for i in range(len(prefixs)-1):
+        prefix_1 = prefixs[i]
+        prefix_2 = prefixs[i+1]
+        result_err = get_sift_error_between_two_frame(prefix_1, prefix_2, opt)
+        avg_err['s'] += result_err['s']
+        avg_err['R'] += result_err['R']
+        avg_err['t'] += result_err['t']
+        avg_err['count'] += 1
 
-    result_err = get_sift_error_between_two_frame('0000', '0001', opt)
+        logger.info(f'match img {prefix_1}, {prefix_2}')
+        logger.info('Error')
+        logger.info('s:{}'.format(result_err['s']))
+        logger.info('R:{}'.format(result_err['R']))
+        logger.info('t:{}'.format(result_err['t']))
+
+    # result_err = get_sift_error_between_two_frame('0000', '0001', opt)
 
 
