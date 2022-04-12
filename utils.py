@@ -31,3 +31,16 @@ def backproject_points(points_xy, depth, intrinsics, scale=0.001):
     points_xyz[:, 2] = -points_xyz[:, 2]
     zero_idx = np.where(points_xyz[:, 2] == 0)
     return points_xyz*scale, zero_idx
+
+
+def add_border(mask, inst_id, kernel_size=2):  # enlarge the region w/ 255
+    # print((255 - mask).sum())
+    output = mask.copy()
+    h, w = mask.shape
+    for i in range(h):
+        for j in range(w):
+            if mask[i][j] == inst_id:
+                output[max(0, i - kernel_size): min(h, i + kernel_size),
+                max(0, j - kernel_size): min(w, j + kernel_size)] = inst_id
+    # print((255 - output).sum())
+    return output

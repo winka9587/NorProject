@@ -1,12 +1,13 @@
 import os
 from extract_2D_kp import extract_sift_kp_from_RGB
-from main import read_scene_imgs, add_border
-from utils import pjoin, config, viz_multi_points_diff_color, RotMatErr, init_logger
+from file_io import read_scene_imgs
+from utils import pjoin, config, init_logger, backproject_points, add_border
+from visualize import viz_multi_points_diff_color
+from eval import RotMatErr
 import cv2
 import sys
 import time
 import numpy as np
-from main import backproject_points
 from captra_utils.pose import get_instance_pose, pose2sRt, sRT2pose
 from captra_utils.align_pose import pose_fit
 from captra_utils.utils_from_captra import backproject
@@ -107,8 +108,8 @@ def extract_sift_feature(arg):
                        meta_idx=meta_idx,
                        meta_s=meta_s,
                        inst_id=instance_id,
-                       crop_xmin = x_min,
-                       crop_ymin = y_min
+                       crop_xmin=x_min,
+                       crop_ymin=y_min
                        )
     return output
 
@@ -166,18 +167,25 @@ def get_sift_error_between_two_frame(prefix_1, prefix_2, opt=None):
     # # 将计算的点反投影,两组点云使用Umeyama算法计算RT
     # # # 测试反投影,得到2D点对应的3D点云 point_3d: nx3
     real_intrinsics = np.array([[591.0125, 0, 322.525], [0, 590.16775, 244.11084], [0, 0, 1]])
-    point_3d_1, depth_zero_idx_1, point_3d_1_origin = backproject_points(match1,
-                                    output_1.depth_cropped,
-                                    intrinsics=real_intrinsics,
-                                    xmin=output_1.crop_xmin,
-                                    ymin=output_1.crop_ymin,
-                                    img=output_1.color)
-    point_3d_2, depth_zero_idx_2, point_3d_2_origin = backproject_points(match2,
-                                    output_2.depth_cropped,
-                                    intrinsics=real_intrinsics,
-                                    xmin=output_2.crop_xmin,
-                                    ymin=output_2.crop_ymin,
-                                    img=output_2.color)
+    # point_3d_1, depth_zero_idx_1, point_3d_1_origin = backproject_points(match1,
+    #                                 output_1.depth_cropped,
+    #                                 intrinsics=real_intrinsics,
+    #                                 xmin=output_1.crop_xmin,
+    #                                 ymin=output_1.crop_ymin,
+    #                                 img=output_1.color)
+    # point_3d_2, depth_zero_idx_2, point_3d_2_origin = backproject_points(match2,
+    #                                 output_2.depth_cropped,
+    #                                 intrinsics=real_intrinsics,
+    #                                 xmin=output_2.crop_xmin,
+    #                                 ymin=output_2.crop_ymin,
+    #                                 img=output_2.color)
+    match1[:, 0] += output_1.crop_xmin
+    match1[:, 1] += output_1.crop_ymin
+    point_3d_1_origin, depth_zero_idx_1 = backproject_points(match1, output_1.depth, real_intrinsics, scale=0.001)
+    match2[:, 0] += output_2.crop_xmin
+    match2[:, 1] += output_2.crop_ymin
+    point_3d_2_origin, depth_zero_idx_2 = backproject_points(match2, output_2.depth, real_intrinsics, scale=0.001)
+
     print(f'match1 project origin:{point_3d_1_origin.shape}')
     print(f'match2 project origin:{point_3d_2_origin.shape}')
     detph_zero_idx = np.concatenate((depth_zero_idx_1, depth_zero_idx_2), axis=1)
