@@ -54,13 +54,8 @@ def config():
     parser.add_argument('--root_path', type=str, default=None, help='')
     parser.add_argument('--dataset', type=str, default=None, help='')
     parser.add_argument('--mode', type=str, default=None, help='')
-    parser.add_argument('--obj_model', type=str, default=None, help='')
+    parser.add_argument('--obj_model', type=str, default='M:/PCL/dataset/obj_models_CAPTRA/', help='')
 
-    parser.add_argument('--nv_prior', type=int, default=1024, help='number of vertices in shape priors')
-    parser.add_argument('--model', type=str, default='results/camera/model_50.pth', help='resume from saved model')
-    parser.add_argument('--n_pts', type=int, default=1024, help='number of foreground points')
-    parser.add_argument('--img_size', type=int, default=192, help='cropped image size')
-    parser.add_argument('--gpu', type=str, default='1', help='GPU to use')
     opt = parser.parse_args()
     return opt
 
@@ -71,9 +66,11 @@ def init_logger(name):
     logger.setLevel(logging.INFO)  # Log等级总开关
     # 第二步，创建一个handler，用于写入日志文件
     rq = time.strftime('%Y%m%d%H%M', time.localtime(time.time()))
-    log_path = os.path.dirname(os.getcwd()) + '/Logs/'
-    log_name = log_path + rq + name +'.log'
+    log_path = pjoin(os.getcwd(), 'log')
+    log_name = pjoin(log_path, rq + '_' + name +'.log')
     logfile = log_name
+    logging.basicConfig(format='%(asctime)s - %(message)s', datefmt='%d-%b-%y %H:%M:%S')
+
     fh = logging.FileHandler(logfile, mode='w')
     fh.setLevel(logging.DEBUG)  # 输出到file的log等级的开关
     # 第三步，定义handler的输出格式

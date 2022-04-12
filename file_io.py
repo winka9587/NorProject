@@ -14,7 +14,7 @@ def read_scene_imgs(root_path, dataset, mode, inst, prefix, obj_name, opt):
     else:
         flip = False
 
-    file_path = pjoin(root_path, dataset, mode, inst)
+    file_path = pjoin(root_path, 'dataset', dataset, mode, inst)
     color = cv2.imread(pjoin(file_path, f'{prefix}_color.png'))
     depth = cv2.imread(pjoin(file_path, f'{prefix}_depth.png'), -1)
     coord = cv2.imread(pjoin(file_path, f'{prefix}_coord.png'))

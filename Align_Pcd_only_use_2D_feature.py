@@ -53,11 +53,11 @@ def extract_sift_feature(arg):
     obj_name = arg.obj_name
     opt = arg.opt
     # 提取3D点
-    color, depth, coord, mask, meta_s = read_scene_imgs(root_path, dataset, mode, inst, prefix, opt)
+    color, depth, coord, mask, meta_s = read_scene_imgs(root_path, dataset, mode, inst, prefix, obj_name, opt)
     instance_id = -1
     meta_idx = 0
     for meta in meta_s:
-        if meta["model_name"] == obj_name:
+        if meta["obj_name"] == obj_name:
             instance_id = meta["inst_idx"]
             break
         else:
