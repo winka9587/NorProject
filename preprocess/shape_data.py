@@ -5,7 +5,7 @@ import glob
 import numpy as np
 import _pickle as cPickle
 sys.path.append('../lib')
-from utils import sample_points_from_mesh
+from preprocess_utils import sample_points_from_mesh
 
 
 def save_nocs_model_to_file(obj_model_dir):

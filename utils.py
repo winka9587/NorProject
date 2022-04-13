@@ -80,3 +80,21 @@ def init_logger(name):
     logger.addHandler(fh)
     logger.info('program start')
     return logger
+
+
+def ensure_dir(path, verbose=False):
+    if not os.path.exists(path):
+        if verbose:
+            print("Create folder ", path)
+        os.makedirs(path)
+    else:
+        if verbose:
+            print(path, " already exists.")
+
+
+def ensure_dirs(paths):
+    if isinstance(paths, list):
+        for path in paths:
+            ensure_dir(path)
+    else:
+        ensure_dir(paths)
