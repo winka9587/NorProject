@@ -76,3 +76,13 @@ def get_config(args, save=True):
     print("Running on ", cfg["device"])
 
     return cfg
+
+
+# get base config like the path to load dataset, save result ...
+def get_base_config():
+    base_path = os.path.dirname(__file__)  # 当前config.py所在的目录(/CAPTRA/configs)为base_path
+    # with open('base_config.yml', 'rb') as f:  # 去当前目录(/CAPTRA/configs)/all_config/--config路径下去找yml文件
+    #     print(1)
+    #     #base_cfg = yaml.load(f, Loader=yaml.FullLoader)
+    base_cfg = {}
+    return base_cfg

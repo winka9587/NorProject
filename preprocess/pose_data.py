@@ -1,3 +1,4 @@
+#coding=gbk
 import os
 import sys
 import glob
@@ -7,6 +8,8 @@ import _pickle as cPickle
 from tqdm import tqdm
 from align import align_nocs_to_depth
 from preprocess_utils import load_depth
+sys.path.append('../configs/')
+from configs.config import get_base_config
 
 
 def create_img_list(data_dir):
@@ -402,10 +405,13 @@ def annotate_test_data(data_dir):
 
 
 if __name__ == '__main__':
-    data_dir = '/dataset'
-    # create list for all data
-    create_img_list(data_dir)
-    # annotate dataset and re-write valid data to list
-    annotate_camera_train(data_dir)
-    annotate_real_train(data_dir)
-    annotate_test_data(data_dir)
+    base_cfg = get_base_config()
+    print(base_cfg['dataset_path'])
+    print(base_cfg['result_path'])
+    # data_dir = '/dataset'
+    # # create list for all data
+    # create_img_list(data_dir)
+    # # annotate dataset and re-write valid data to list
+    # annotate_camera_train(data_dir)
+    # annotate_real_train(data_dir)
+    # annotate_test_data(data_dir)
