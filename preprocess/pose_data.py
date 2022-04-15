@@ -9,7 +9,7 @@ from tqdm import tqdm
 from align import align_nocs_to_depth
 from preprocess_utils import load_depth
 sys.path.append('../configs/')
-from configs.config import get_base_config
+from configs.base_config import get_base_config
 
 
 def create_img_list(data_dir):
@@ -405,7 +405,7 @@ def annotate_test_data(data_dir):
 
 
 if __name__ == '__main__':
-    base_cfg = get_base_config()
+    # base_cfg = get_base_config()
     print(base_cfg['dataset_path'])
     print(base_cfg['result_path'])
     # data_dir = '/dataset'

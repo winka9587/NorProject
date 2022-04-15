@@ -1,6 +1,8 @@
+
 import yaml
 import torch
 import os
+import sys
 from os.path import join as pjoin
 sys.path.append('..')
 from utils import ensure_dirs
@@ -20,12 +22,15 @@ def overwrite_config(cfg, key, key_path, value):
 
 
 def get_config(args, save=True):
-    base_path = os.path.dirname(__file__)  # µ±Ç°config.pyËùÔÚµÄÄ¿Â¼(/CAPTRA/configs)Îªbase_path
-    f = open(pjoin(base_path, 'all_config', args.config), 'r')  # È¥µ±Ç°Ä¿Â¼(/CAPTRA/configs)/all_config/--configÂ·¾¶ÏÂÈ¥ÕÒymlÎÄ¼ş
-    cfg = yaml.load(f, Loader=yaml.FullLoader)  # ¶ÁÈ¡all_configÖĞ¸ú×ÙµÄ³õÊ¼ÅäÖÃ, ·µ»Ø×ÖµäÇ¶Ì××Öµä
+    base_path = ''
+    # base_path = os.path.dirname(__file__)  # å½“å‰config.pyæ‰€åœ¨çš„ç›®å½•(/CAPTRA/configs)ä¸ºbase_path
+    f = open(pjoin(base_path, 'all_config', args.config), 'r')  # å»å½“å‰ç›®å½•(/CAPTRA/configs)/all_config/--configè·¯å¾„ä¸‹å»æ‰¾ymlæ–‡ä»¶
+    cfg = yaml.load(f, Loader=yaml.FullLoader)  # è¯»å–all_configä¸­è·Ÿè¸ªçš„åˆå§‹é…ç½®, è¿”å›å­—å…¸åµŒå¥—å­—å…¸
+    # with open(pjoin(base_path, 'all_config', args.config), 'r') as f:
+    #     cfg = yaml.load(f, Loader=yaml.FullLoader)  # è¯»å–all_configä¸­è·Ÿè¸ªçš„åˆå§‹é…ç½®, è¿”å›å­—å…¸åµŒå¥—å­—å…¸
 
     """ Update info from command line """
-    # Ê¹ÓÃÆô¶¯Ê±µÄÃüÁîĞĞ²ÎÊıÀ´Ìæ»»³õÊ¼ÅäÖÃÖĞ¶ÔÓ¦µÄÅäÖÃ
+    # ä½¿ç”¨å¯åŠ¨æ—¶çš„å‘½ä»¤è¡Œå‚æ•°æ¥æ›¿æ¢åˆå§‹é…ç½®ä¸­å¯¹åº”çš„é…ç½®
     args = vars(args)  # convert to a dictionary!
     args.pop('config')
     for key, item in args.items():
@@ -50,25 +55,25 @@ def get_config(args, save=True):
     ensure_dirs(root_dir)
     cfg['num_expr'] = root_dir.split('/')[-1]
 
-    # ´æ´¢ÅäÖÃ
+    # å­˜å‚¨é…ç½®
     if save:
         yml_cfg = pjoin(root_dir, 'config.yml')
         yml_obj = pjoin(root_dir, cfg['obj_config'])
         print('Saving config and obj_config at {} and {}'.format(yml_cfg, yml_obj))
-        # ÕâÊÇÔÚ×öÊ²Ã´£¿
-        # zip½«Á½¸ö¿Éµü´ú¶ÔÏóÖĞµÄ¶ÔÓ¦ÔªËØ´ò°üÎªÔª×é£¬ÀıÈçÏÂÃæ[(yml_cfg, cfg), (yml_obj, obj_cfg)]
-        # Ê¹ÓÃyaml.dump½«cfgĞ´ÈëymlÎÄ¼şÖĞ
+        # è¿™æ˜¯åœ¨åšä»€ä¹ˆï¼Ÿ
+        # zipå°†ä¸¤ä¸ªå¯è¿­ä»£å¯¹è±¡ä¸­çš„å¯¹åº”å…ƒç´ æ‰“åŒ…ä¸ºå…ƒç»„ï¼Œä¾‹å¦‚ä¸‹é¢[(yml_cfg, cfg), (yml_obj, obj_cfg)]
+        # ä½¿ç”¨yaml.dumpå°†cfgå†™å…¥ymlæ–‡ä»¶ä¸­
         for yml_file, content in zip([yml_cfg, yml_obj], [cfg, obj_cfg]):
             with open(yml_file, 'w') as f:
                 yaml.dump(content, f, default_flow_style=False)
 
-    # ½«obj_cfg(obj_info_nocs.yml)ÖĞµÄÒ»Ğ©ÅäÖÃÌí¼Óµ½cfgÖĞ£¬ÓÃÓÚÒ»Æğ·µ»Ø
+    # å°†obj_cfg(obj_info_nocs.yml)ä¸­çš„ä¸€äº›é…ç½®æ·»åŠ åˆ°cfgä¸­ï¼Œç”¨äºä¸€èµ·è¿”å›
     """ Fill in additional info """
     obj_cat = cfg["obj_category"]
     cfg["num_parts"] = obj_cfg[obj_cat]["num_parts"]
     cfg["num_joints"] = obj_cfg[obj_cat]["num_joints"]
     cfg["obj_tree"] = obj_cfg[obj_cat]["tree"]
-    cfg["obj_sym"] = obj_cfg[obj_cat]["sym"]  # symÊÇÖ¸Ê²Ã´£¿¶Ô³Æ£¿
+    cfg["obj_sym"] = obj_cfg[obj_cat]["sym"]  # symæ˜¯æŒ‡ä»€ä¹ˆï¼Ÿå¯¹ç§°ï¼Ÿ
     cfg["obj"] = obj_cfg
     cfg["obj_info"] = obj_cfg[obj_cat]
     cfg["root_dset"] = obj_cfg['basepath']
@@ -80,9 +85,13 @@ def get_config(args, save=True):
 
 # get base config like the path to load dataset, save result ...
 def get_base_config():
-    base_path = os.path.dirname(__file__)  # µ±Ç°config.pyËùÔÚµÄÄ¿Â¼(/CAPTRA/configs)Îªbase_path
-    # with open('base_config.yml', 'rb') as f:  # È¥µ±Ç°Ä¿Â¼(/CAPTRA/configs)/all_config/--configÂ·¾¶ÏÂÈ¥ÕÒymlÎÄ¼ş
+    base_path = os.path.dirname(__file__)  # å½“å‰config.pyæ‰€åœ¨çš„ç›®å½•(/CAPTRA/configs)ä¸ºbase_path
+    # with open('base_config.yml', 'rb') as f:  # å»å½“å‰ç›®å½•(/CAPTRA/configs)/all_config/--configè·¯å¾„ä¸‹å»æ‰¾ymlæ–‡ä»¶
     #     print(1)
     #     #base_cfg = yaml.load(f, Loader=yaml.FullLoader)
     base_cfg = {}
     return base_cfg
+
+
+if __name__ == '__main__':
+    print('base config')
