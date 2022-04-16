@@ -10,9 +10,12 @@ from align import align_nocs_to_depth
 from preprocess_utils import load_depth
 sys.path.append('../configs/')
 from configs.base_config import get_base_config
+from os.path import join as pjoin
+from utils import ensure_dir
 
 
-def create_img_list(data_dir):
+def create_img_list(data_dir, save_dir):
+    save_dir = pjoin(save_dir, 'img_list')
     """ Create train/val/test data list for CAMERA and Real. """
     # CAMERA dataset
     # 在data/CAMERA目录下，生成train_list_all.txt和val_list_all.txt来记录所有场景的路径
@@ -30,9 +33,11 @@ def create_img_list(data_dir):
             # 例如:train/27498/0000
             img_path = os.path.join(subset, '{:05d}'.format(folder_id), '{:04d}'.format(img_id))
             img_list.append(img_path)
-        with open(os.path.join(data_dir, 'CAMERA', subset+'_list_all.txt'), 'w') as f:
+        ensure_dir(pjoin(save_dir, 'CAMERA'), True)
+        with open(os.path.join(save_dir, 'CAMERA', subset+'_list_all.txt'), 'w') as f:
             for img_path in img_list:
                 f.write("%s\n" % img_path)
+        print('create_img_list {}'.format(os.path.join(save_dir, 'CAMERA', subset+'_list_all.txt')))
     # Real dataset
     # Real数据集和CAMERA数据集结构不同
     for subset in ['train', 'test']:
@@ -50,9 +55,11 @@ def create_img_list(data_dir):
                 img_path = os.path.join(subset, folder, img_ind)
                 # img_path=/xxx/0000
                 img_list.append(img_path)
-        with open(os.path.join(data_dir, 'Real', subset+'_list_all.txt'), 'w') as f:
+        ensure_dir(pjoin(save_dir, 'Real'), True)
+        with open(os.path.join(save_dir, 'Real', subset+'_list_all.txt'), 'w') as f:
             for img_path in img_list:
                 f.write("%s\n" % img_path)
+        print('create_img_list {}'.format(os.path.join(save_dir, 'Real', subset + '_list_all.txt')))
     print('Write all data paths to file done!')
 
 
@@ -60,7 +67,7 @@ def process_data(img_path, depth):
     """ Load instance masks for the objects in the image. """
     # 读取mask图
     mask_path = img_path + '_mask.png'
-    mask = cv2.imread(mask_path)[:, :, 2]
+    mask = cv2.imread(mask_path)[:, :, 2]  # mask只需要一个通道
     mask = np.array(mask, dtype=np.int32)
     # unique函数的作用是将mask中的所有数都记录下来(重复的删掉)
     # 例如mask中只有值为0,20,255的像素,最终返回(0,20,255)
@@ -89,6 +96,7 @@ def process_data(img_path, depth):
     bboxes = np.zeros((num_all_inst, 4), dtype=np.int32)
 
     meta_path = img_path + '_meta.txt'
+    # 对每一行对应的实例进行处理
     with open(meta_path, 'r') as f:
         i = 0
         for line in f:
@@ -149,17 +157,23 @@ def process_data(img_path, depth):
     return masks, coords, class_ids, instance_ids, model_list, bboxes
 
 
-def annotate_camera_train(data_dir):
+# 读取img_list_dir下的train_list_all.txt
+# 对其中有效的计算gt并存入train_list.txt
+def annotate_camera_train(dataset_dir, save_path):
+    img_list_dir = pjoin(save_path, 'img_list')
+    gt_label_dir = pjoin(save_path, 'gt_label')
     """ Generate gt labels for CAMERA train data. """
-    camera_train = open(os.path.join(data_dir, 'CAMERA', 'train_list_all.txt')).read().splitlines()
+    camera_train = open(os.path.join(img_list_dir, 'CAMERA', 'train_list_all.txt')).read().splitlines()
     intrinsics = np.array([[577.5, 0, 319.5], [0, 577.5, 239.5], [0, 0, 1]])
     # meta info for re-label mug category
-    with open(os.path.join(data_dir, 'obj_models/mug_meta.pkl'), 'rb') as f:
+    with open(os.path.join(dataset_dir, 'obj_models/mug_meta.pkl'), 'rb') as f:
         mug_meta = cPickle.load(f)
 
     valid_img_list = []
     for img_path in tqdm(camera_train):
-        img_full_path = os.path.join(data_dir, 'CAMERA', img_path)
+        img_full_path = os.path.join(dataset_dir, 'CAMERA', img_path)
+        gt_label_path = pjoin(gt_label_dir, 'CAMERA', img_path)
+        ensure_dir(pjoin(gt_label_dir, 'CAMERA'), True)
         # 检测该CAMERA数据集下的路径是否包含全部5个文件
         all_exist = os.path.exists(img_full_path + '_color.png') and \
                     os.path.exists(img_full_path + '_coord.png') and \
@@ -198,11 +212,11 @@ def annotate_camera_train(data_dir):
         gts['translations'] = translations.astype(np.float32)  # np.array, T
         gts['instance_ids'] = instance_ids  # int list, start from 1
         gts['model_list'] = model_list  # str list, model id/name
-        with open(img_full_path + '_label.pkl', 'wb') as f:
+        with open(gt_label_path + '_label.pkl', 'wb') as f:
             cPickle.dump(gts, f)
         valid_img_list.append(img_path)
     # write valid img list to file
-    with open(os.path.join(data_dir, 'CAMERA/train_list.txt'), 'w') as f:
+    with open(os.path.join(img_list_dir, 'CAMERA/train_list.txt'), 'w') as f:
         for img_path in valid_img_list:
             f.write("%s\n" % img_path)
 
@@ -405,13 +419,14 @@ def annotate_test_data(data_dir):
 
 
 if __name__ == '__main__':
-    # base_cfg = get_base_config()
+    base_cfg = get_base_config()
     print(base_cfg['dataset_path'])
     print(base_cfg['result_path'])
-    # data_dir = '/dataset'
-    # # create list for all data
-    # create_img_list(data_dir)
-    # # annotate dataset and re-write valid data to list
-    # annotate_camera_train(data_dir)
+    dataset_path = base_cfg['dataset_path']
+    save_path = base_cfg['result_path']
+    # create list for all data
+    create_img_list(dataset_path, save_path)
+    # annotate dataset and re-write valid data to list
+    annotate_camera_train(dataset_path, save_path)
     # annotate_real_train(data_dir)
     # annotate_test_data(data_dir)
