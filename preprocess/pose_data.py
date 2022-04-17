@@ -157,8 +157,9 @@ def process_data(img_path, depth):
     return masks, coords, class_ids, instance_ids, model_list, bboxes
 
 
-# 读取img_list_dir下的train_list_all.txt
-# 对其中有效的计算gt并存入train_list.txt
+# 读取img_list_dir(img_list文件夹)下的train_list_all.txt
+# 对其中能够有效计算gt的前缀存入同目录下的train_list.txt
+# 计算出的gt(.pkl文件)存入与img_list同目录的gt_label中
 def annotate_camera_train(dataset_dir, save_path):
     img_list_dir = pjoin(save_path, 'img_list')
     gt_label_dir = pjoin(save_path, 'gt_label')
@@ -212,6 +213,7 @@ def annotate_camera_train(dataset_dir, save_path):
         gts['translations'] = translations.astype(np.float32)  # np.array, T
         gts['instance_ids'] = instance_ids  # int list, start from 1
         gts['model_list'] = model_list  # str list, model id/name
+        ensure_dir(gt_label_path[:(max(gt_label_path.rfind('/'), gt_label_path.rfind('\\')))], True)
         with open(gt_label_path + '_label.pkl', 'wb') as f:
             cPickle.dump(gts, f)
         valid_img_list.append(img_path)
@@ -221,24 +223,27 @@ def annotate_camera_train(dataset_dir, save_path):
             f.write("%s\n" % img_path)
 
 
-def annotate_real_train(data_dir):
+def annotate_real_train(dataset_dir, save_path):
+    img_list_dir = pjoin(save_path, 'img_list')
+    gt_label_dir = pjoin(save_path, 'gt_label')
     """ Generate gt labels for Real train data through PnP. """
-    real_train = open(os.path.join(data_dir, 'Real/train_list_all.txt')).read().splitlines()
+    real_train = open(os.path.join(img_list_dir, 'Real/train_list_all.txt')).read().splitlines()
     intrinsics = np.array([[591.0125, 0, 322.525], [0, 590.16775, 244.11084], [0, 0, 1]])
     # scale factors for all instances
     scale_factors = {}
-    path_to_size = glob.glob(os.path.join(data_dir, 'obj_models/real_train', '*_norm.txt'))
+    path_to_size = glob.glob(os.path.join(dataset_dir, 'obj_models/real_train', '*_norm.txt'))
     for inst_path in sorted(path_to_size):
-        instance = os.path.basename(inst_path).split('.')[0]
-        bbox_dims = np.loadtxt(inst_path)
-        scale_factors[instance] = np.linalg.norm(bbox_dims)
+        instance = os.path.basename(inst_path).split('.')[0]  # instance model name (like: mug_white_green_norm)
+        bbox_dims = np.loadtxt(inst_path)  # read bbox txt
+        scale_factors[instance] = np.linalg.norm(bbox_dims)  # 然后直接计算模,即为scale
     # meta info for re-label mug category
-    with open(os.path.join(data_dir, 'obj_models/mug_meta.pkl'), 'rb') as f:
+    with open(os.path.join(dataset_dir, 'obj_models/mug_meta.pkl'), 'rb') as f:
         mug_meta = cPickle.load(f)
 
     valid_img_list = []
     for img_path in tqdm(real_train):
-        img_full_path = os.path.join(data_dir, 'Real', img_path)
+        img_full_path = os.path.join(dataset_dir, 'Real', img_path)
+        gt_label_path = pjoin(gt_label_dir, 'Real', img_path)
         all_exist = os.path.exists(img_full_path + '_color.png') and \
                     os.path.exists(img_full_path + '_coord.png') and \
                     os.path.exists(img_full_path + '_depth.png') and \
@@ -287,16 +292,19 @@ def annotate_real_train(data_dir):
         gts['translations'] = translations.astype(np.float32)  # np.array, T
         gts['instance_ids'] = instance_ids  # int list, start from 1
         gts['model_list'] = model_list  # str list, model id/name
-        with open(img_full_path + '_label.pkl', 'wb') as f:
+        ensure_dir(gt_label_path[:(max(gt_label_path.rfind('/'), gt_label_path.rfind('\\')))], True)
+        with open(gt_label_path + '_label.pkl', 'wb') as f:
             cPickle.dump(gts, f)
         valid_img_list.append(img_path)
     # write valid img list to file
-    with open(os.path.join(data_dir, 'Real/train_list.txt'), 'w') as f:
+    with open(os.path.join(img_list_dir, 'Real/train_list.txt'), 'w') as f:
         for img_path in valid_img_list:
             f.write("%s\n" % img_path)
 
 
-def annotate_test_data(data_dir):
+def annotate_test_data(dataset_dir, save_path):
+    img_list_dir = pjoin(save_path, 'img_list')
+    gt_label_dir = pjoin(save_path, 'gt_label')
     """ Generate gt labels for test data.
         Properly copy handle_visibility provided by NOCS gts.
     """
@@ -305,28 +313,29 @@ def annotate_test_data(data_dir):
     #   val        3792 imgs        132 imgs         1856 (23) imgs      50 insts
     #   test       0 img            0 img            0 img               2 insts
 
-    camera_val = open(os.path.join(data_dir, 'CAMERA', 'val_list_all.txt')).read().splitlines()
-    real_test = open(os.path.join(data_dir, 'Real', 'test_list_all.txt')).read().splitlines()
+    camera_val = open(os.path.join(img_list_dir, 'CAMERA', 'val_list_all.txt')).read().splitlines()
+    real_test = open(os.path.join(img_list_dir, 'Real', 'test_list_all.txt')).read().splitlines()
     camera_intrinsics = np.array([[577.5, 0, 319.5], [0, 577.5, 239.5], [0, 0, 1]])
     real_intrinsics = np.array([[591.0125, 0, 322.525], [0, 590.16775, 244.11084], [0, 0, 1]])
     # compute model size
     model_file_path = ['obj_models/camera_val.pkl', 'obj_models/real_test.pkl']
     models = {}
     for path in model_file_path:
-        with open(os.path.join(data_dir, path), 'rb') as f:
+        with open(os.path.join(dataset_dir, path), 'rb') as f:
             models.update(cPickle.load(f))
     model_sizes = {}
     for key in models.keys():
         model_sizes[key] = 2 * np.amax(np.abs(models[key]), axis=0)
     # meta info for re-label mug category
-    with open(os.path.join(data_dir, 'obj_models/mug_meta.pkl'), 'rb') as f:
+    with open(os.path.join(dataset_dir, 'obj_models/mug_meta.pkl'), 'rb') as f:
         mug_meta = cPickle.load(f)
 
     subset_meta = [('CAMERA', camera_val, camera_intrinsics, 'val'), ('Real', real_test, real_intrinsics, 'test')]
     for source, img_list, intrinsics, subset in subset_meta:
         valid_img_list = []
         for img_path in tqdm(img_list):
-            img_full_path = os.path.join(data_dir, source, img_path)
+            img_full_path = os.path.join(dataset_dir, source, img_path)
+            gt_label_path = pjoin(gt_label_dir, source, img_path)
             all_exist = os.path.exists(img_full_path + '_color.png') and \
                         os.path.exists(img_full_path + '_coord.png') and \
                         os.path.exists(img_full_path + '_depth.png') and \
@@ -427,6 +436,6 @@ if __name__ == '__main__':
     # create list for all data
     create_img_list(dataset_path, save_path)
     # annotate dataset and re-write valid data to list
-    annotate_camera_train(dataset_path, save_path)
-    # annotate_real_train(data_dir)
+    # annotate_camera_train(dataset_path, save_path)
+    annotate_real_train(dataset_path, save_path)
     # annotate_test_data(data_dir)

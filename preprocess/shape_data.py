@@ -6,7 +6,9 @@ import numpy as np
 import _pickle as cPickle
 sys.path.append('../lib')
 from preprocess_utils import sample_points_from_mesh
-
+from configs.base_config import get_base_config
+from os.path import join as pjoin
+from utils import ensure_dir
 
 def save_nocs_model_to_file(obj_model_dir):
     """ Sampling points from mesh model and normalize to NOCS.
@@ -241,7 +243,13 @@ def save_model_to_hdf5(obj_model_dir, n_points, fps=False, include_distractors=F
 
 
 if __name__ == '__main__':
-    obj_model_dir = '/dataset/obj_models'
+    base_cfg = get_base_config()
+    print(base_cfg['dataset_path'])
+    print(base_cfg['result_path'])
+    dataset_path = base_cfg['dataset_path']
+    save_path = base_cfg['result_path']
+    # obj_model_dir = '/dataset/obj_models'
+    obj_model_dir = pjoin(dataset_path, 'obj_models')
     # Save ground truth models for training deform network
     # 将CAMERA数据集和Real数据集的模型处理成字典key(模型名):value(模型对应的points:1024x3大小)存出到pkl文件中
     print('save_nocs_... start')
