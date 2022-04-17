@@ -349,7 +349,7 @@ def annotate_test_data(dataset_dir, save_path):
                 continue
             num_insts = len(instance_ids)
             # match each instance with NOCS ground truth to properly assign gt_handle_visibility
-            nocs_dir = os.path.join(os.path.dirname(data_dir), 'results/nocs_results')
+            nocs_dir = os.path.join(dataset_dir, 'gts')
             if source == 'CAMERA':
                 nocs_path = os.path.join(nocs_dir, 'val', 'results_val_{}_{}.pkl'.format(
                     img_path.split('/')[-2], img_path.split('/')[-1]))
