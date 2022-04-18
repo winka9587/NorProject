@@ -8,7 +8,7 @@ import _pickle as cPickle
 from tqdm import tqdm
 from align import align_nocs_to_depth
 from preprocess_utils import load_depth
-sys.path.append('../configs/')
+sys.path.append('../../configs/')
 from configs.base_config import get_base_config
 from os.path import join as pjoin
 from utils import ensure_dir

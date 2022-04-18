@@ -4,7 +4,7 @@ import h5py
 import glob
 import numpy as np
 import _pickle as cPickle
-sys.path.append('../network/lib')
+sys.path.append('../../network/lib')
 from preprocess_utils import sample_points_from_mesh
 from configs.base_config import get_base_config
 from os.path import join as pjoin
