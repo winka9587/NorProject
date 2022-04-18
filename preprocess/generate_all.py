@@ -52,7 +52,7 @@ def main(root_dset='../../../../data/nocs_data', data_type='all', parallel=True,
         execute(cmd)
     """
     # windows下需要对命令中的路径加引号
-    windows = True
+    windows = False
     # 获取每个实例的gt位姿
     for data_type in all_data:
         if windows:

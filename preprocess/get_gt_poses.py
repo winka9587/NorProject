@@ -13,8 +13,11 @@ BASEPATH = os.path.dirname(__file__)
 sys.path.insert(0, BASEPATH)
 sys.path.insert(0, pjoin(BASEPATH, '..'))
 
-from nocs_utils import backproject, remove_border
+from captra_utils.utils_from_captra import backproject, remove_border
 from align_pose import pose_fit
+from configs.base_config import get_base_config
+from os.path import join as pjoin
+from utils import ensure_dir
 
 
 # 获取位姿存入一个字典

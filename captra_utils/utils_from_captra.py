@@ -882,3 +882,14 @@ def backproject(depth, intrinsics=np.array([[577.5, 0, 319.5], [0., 577.5, 239.5
     # 返回3D坐标(单位已经转换为cm)和2D图像坐标idxs
     return pts * scale, idxs
 
+def remove_border(mask, kernel_size=2):  # enlarge the region w/ 255
+    # print((255 - mask).sum())
+    output = mask.copy()
+    h, w = mask.shape
+    for i in range(h):
+        for j in range(w):
+            if mask[i][j] == 255:
+                output[max(0, i - kernel_size): min(h, i + kernel_size),
+                max(0, j - kernel_size): min(w, j + kernel_size)] = 255
+    # print((255 - output).sum())
+    return output
