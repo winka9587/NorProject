@@ -83,13 +83,14 @@ def init_logger(name):
 
 
 def ensure_dir(path, verbose=False):
+    print("ensure_dir: ")
     if not os.path.exists(path):
         if verbose:
-            print("Create folder ", path)
+            print("     Create folder ", path)
         os.makedirs(path)
     else:
         if verbose:
-            print(path, " already exists.")
+            print(f"    {path} already exists.")
 
 
 def ensure_dirs(paths):
