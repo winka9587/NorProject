@@ -1,2 +1,3 @@
-dataset_path: '/data1/jl/awsl-JL/object-deformnet-master/object-deformnet-master/data/'
-result_path: '/data1/cxx/Lab_work/result/'
+# 路径的最后不要加 '/'
+dataset_path: '/data1/jl/awsl-JL/object-deformnet-master/object-deformnet-master/data'
+result_path: '/data1/cxx/Lab_work/result'

@@ -349,7 +349,7 @@ def annotate_test_data(dataset_dir, save_path):
                 continue
             num_insts = len(instance_ids)
             # match each instance with NOCS ground truth to properly assign gt_handle_visibility
-            nocs_dir = os.path.join(dataset_dir, 'gts')
+            nocs_dir = os.path.join(os.path.dirname(dataset_dir), 'results/nocs_results')
             if source == 'CAMERA':
                 nocs_path = os.path.join(nocs_dir, 'val', 'results_val_{}_{}.pkl'.format(
                     img_path.split('/')[-2], img_path.split('/')[-1]))
@@ -418,11 +418,12 @@ def annotate_test_data(dataset_dir, save_path):
             gts['translations'] = translations.astype(np.float32)    # np.array, T
             gts['poses'] = poses.astype(np.float32)    # np.array
             gts['handle_visibility'] = handle_visibility    # handle visibility of mug
-            with open(img_full_path + '_label.pkl', 'wb') as f:
+            ensure_dir(gt_label_path[:(max(gt_label_path.rfind('/'), gt_label_path.rfind('\\')))], True)
+            with open(gt_label_path + '_label.pkl', 'wb') as f:
                 cPickle.dump(gts, f)
             valid_img_list.append(img_path)
         # write valid img list to file
-        with open(os.path.join(data_dir, source, subset+'_list.txt'), 'w') as f:
+        with open(os.path.join(img_list_dir, source, subset+'_list.txt'), 'w') as f:
             for img_path in valid_img_list:
                 f.write("%s\n" % img_path)
 
@@ -437,5 +438,5 @@ if __name__ == '__main__':
     create_img_list(dataset_path, save_path)
     # annotate dataset and re-write valid data to list
     # annotate_camera_train(dataset_path, save_path)
-    annotate_real_train(dataset_path, save_path)
-    # annotate_test_data(data_dir)
+    # annotate_real_train(dataset_path, save_path)
+    annotate_test_data(dataset_path, save_path)
