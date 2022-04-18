@@ -1,0 +1,69 @@
+2022-04-12 17:11:55,715 - utils.py[line:81] - INFO: program start
+2022-04-12 17:11:58,291 - Align_Pcd_only_use_2D_feature.py[line:231] - INFO: ============== frame 0000 and 0001 ==============
+2022-04-12 17:11:58,292 - Align_Pcd_only_use_2D_feature.py[line:232] - INFO: prefix:0000
+2022-04-12 17:11:58,292 - Align_Pcd_only_use_2D_feature.py[line:233] - INFO: pose1:
+{'rotation': array([[-0.16502296,  0.03976696, -0.9854877 ],
+       [-0.74484465,  0.64993814,  0.15095321],
+       [ 0.64650899,  0.75894599, -0.07763451]]), 'scale': 0.532934928492268, 'translation': array([[ 0.27486084],
+       [ 0.10483893],
+       [-1.07163064]])}
+2022-04-12 17:11:58,293 - Align_Pcd_only_use_2D_feature.py[line:234] - INFO: prefix:0001
+2022-04-12 17:11:58,294 - Align_Pcd_only_use_2D_feature.py[line:235] - INFO: pose2:
+{'rotation': array([[-0.15744983,  0.05369061, -0.98606636],
+       [-0.73186157,  0.66405156,  0.1530169 ],
+       [ 0.66301447,  0.74575656, -0.06526071]]), 'scale': 0.5340271973913271, 'translation': array([[ 0.26852822],
+       [ 0.09475974],
+       [-1.07407139]])}
+2022-04-12 17:11:58,294 - Align_Pcd_only_use_2D_feature.py[line:236] - INFO: pose_12:
+{'rotation': array([[ 1.0019235 ,  0.00332816,  0.0155401 ],
+       [-0.0036224 ,  1.00186315,  0.01898361],
+       [-0.01547416, -0.0190374 ,  1.00174917]]), 'scale': 1.0, 'translation': array([[0.00944301],
+       [0.01106455],
+       [0.00568281]])}
+2022-04-12 17:11:58,294 - Align_Pcd_only_use_2D_feature.py[line:237] - INFO: pose_sift:
+{'rotation': array([[ 0.9998534 , -0.01039435,  0.01360628],
+       [ 0.01078225,  0.99952838, -0.02875348],
+       [-0.01330099,  0.02889597,  0.99949393]]), 'scale': 1.0034757175056208, 'translation': array([[ 0.00716348],
+       [-0.04351127],
+       [ 0.00459113]])}
+2022-04-12 17:11:58,294 - Align_Pcd_only_use_2D_feature.py[line:238] - INFO: SIFT match Error:
+{'translation': array([0.05463432]), 'scale': 1.0034757175056208, 'rotation': 0.0}
+2022-04-12 17:11:58,297 - Align_Pcd_only_use_2D_feature.py[line:290] - INFO: match img 0000, 0001
+2022-04-12 17:11:58,297 - Align_Pcd_only_use_2D_feature.py[line:291] - INFO: Error
+2022-04-12 17:11:58,297 - Align_Pcd_only_use_2D_feature.py[line:292] - INFO: s:1.0034757175056208
+2022-04-12 17:11:58,297 - Align_Pcd_only_use_2D_feature.py[line:293] - INFO: R:0.0
+2022-04-12 17:11:58,297 - Align_Pcd_only_use_2D_feature.py[line:294] - INFO: t:[0.05463432]
+2022-04-12 17:12:00,636 - Align_Pcd_only_use_2D_feature.py[line:231] - INFO: ============== frame 0001 and 0002 ==============
+2022-04-12 17:12:00,636 - Align_Pcd_only_use_2D_feature.py[line:232] - INFO: prefix:0001
+2022-04-12 17:12:00,636 - Align_Pcd_only_use_2D_feature.py[line:233] - INFO: pose1:
+{'rotation': array([[-0.16486854,  0.04766833, -0.98516298],
+       [-0.74173301,  0.65237327,  0.15569605],
+       [ 0.65011577,  0.75639728, -0.07219866]]), 'scale': 0.5345596007754391, 'translation': array([[ 0.26760789],
+       [ 0.09307829],
+       [-1.0743651 ]])}
+2022-04-12 17:12:00,636 - Align_Pcd_only_use_2D_feature.py[line:234] - INFO: prefix:0002
+2022-04-12 17:12:00,637 - Align_Pcd_only_use_2D_feature.py[line:235] - INFO: pose2:
+{'rotation': array([[-0.15804234,  0.05243022, -0.9860394 ],
+       [-0.73942416,  0.65553727,  0.15337145],
+       [ 0.65442687,  0.75334054, -0.06483447]]), 'scale': 0.5344018061161291, 'translation': array([[ 0.26702699],
+       [ 0.09564074],
+       [-1.07593161]])}
+2022-04-12 17:12:00,637 - Align_Pcd_only_use_2D_feature.py[line:236] - INFO: pose_12:
+{'rotation': array([[ 0.9996698 , -0.00209253,  0.00810059],
+       [ 0.00205967,  0.99969444,  0.00406089],
+       [-0.008109  , -0.00404406,  0.99966375]]), 'scale': 1.0, 'translation': array([[0.00840522],
+       [0.00640259],
+       [0.00061868]])}
+2022-04-12 17:12:00,637 - Align_Pcd_only_use_2D_feature.py[line:237] - INFO: pose_sift:
+{'rotation': array([[ 9.99999236e-01, -8.49847617e-04,  8.97691070e-04],
+       [ 8.50312337e-04,  9.99999505e-01, -5.17428857e-04],
+       [-8.97250890e-04,  5.18191779e-04,  9.99999463e-01]]), 'scale': 0.9999629876481027, 'translation': array([[-0.00077682],
+       [ 0.00103325],
+       [ 0.00022203]])}
+2022-04-12 17:12:00,638 - Align_Pcd_only_use_2D_feature.py[line:238] - INFO: SIFT match Error:
+{'translation': array([0.01064411]), 'scale': 0.9999629876481027, 'rotation': 0.031428714597762704}
+2022-04-12 17:12:00,640 - Align_Pcd_only_use_2D_feature.py[line:290] - INFO: match img 0001, 0002
+2022-04-12 17:12:00,640 - Align_Pcd_only_use_2D_feature.py[line:291] - INFO: Error
+2022-04-12 17:12:00,640 - Align_Pcd_only_use_2D_feature.py[line:292] - INFO: s:0.9999629876481027
+2022-04-12 17:12:00,640 - Align_Pcd_only_use_2D_feature.py[line:293] - INFO: R:0.031428714597762704
+2022-04-12 17:12:00,640 - Align_Pcd_only_use_2D_feature.py[line:294] - INFO: t:[0.01064411]
