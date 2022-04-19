@@ -1,3 +1,4 @@
+#coding=utf-8
 import math
 import numpy as np
 import torch.utils.data as data
@@ -12,6 +13,7 @@ from dataset_process import split_nocs_dataset
 
 # result_path:
 #       --img_list
+# obj_category: [1, 2, 3, 4, 5, 6]
 # mode: [train, test]
 # source: [Real, CAMERA, Real_CAMERA]
 class NOCSDataset(data.Dataset):
@@ -23,9 +25,10 @@ class NOCSDataset(data.Dataset):
         self.mode = mode
         self.n_points = n_points
         self.opt = opt
+        self.bad_ins = bad_ins  # bad_insæ˜¯ä¸€ä¸ªæ•°ç»„,å­˜å‚¨å®ä¾‹æ¨¡å‹åï¼Œå°†ä¸å¥½çš„å®ä¾‹ä»æ•°æ®é›†file_listä¸­å‰”é™¤
         self.file_list = self.collect_data()
         self.len = len(self.file_list)
-        self.bad_ins = bad_ins  # bad_insÊÇÒ»¸öÊı×é,´æ´¢ÊµÀıÄ£ĞÍÃû£¬½«²»ºÃµÄÊµÀı´ÓÊı¾İ¼¯file_listÖĞÌŞ³ı
+
 
 
     def collect_data(self):
@@ -33,14 +36,14 @@ class NOCSDataset(data.Dataset):
         splits_path = pjoin(self.dataset_path, "splits", self.obj_category, self.num_expr)
         idx_txt = pjoin(splits_path, f'{self.mode}.txt')
         print(f'NOCSDataSet load data from {idx_txt}')
-        # Èç¹ûÃ»ÓĞ{mode}.txt£¬Ê¹ÓÃsplit_nocs_datasetº¯ÊıÉú³ÉÒ»¸ö
+        # å¦‚æœæ²¡æœ‰{mode}.txtï¼Œä½¿ç”¨split_nocs_datasetå‡½æ•°ç”Ÿæˆä¸€ä¸ª
         splits_ready = os.path.exists(idx_txt)
         if not splits_ready:
             split_nocs_dataset(self.root_dset, self.obj_category, self.num_expr, self.mode, self.bad_ins)
-        # ¶ÁÈ¡mode.txtÎÄ¼ş
+        # è¯»å–mode.txtæ–‡ä»¶
         with open(idx_txt, "r", errors='replace') as fp:
             lines = fp.readlines()
-            file_list = [line.strip() for line in lines]  # ½«Ã¿Ò»ĞĞµÄnpzÎÄ¼şÂ·¾¶´æÈëfile_listÖĞ
+            file_list = [line.strip() for line in lines]  # å°†æ¯ä¸€è¡Œçš„npzæ–‡ä»¶è·¯å¾„å­˜å…¥file_listä¸­
         # if downsampling is not None:
         #     file_list = file_list[::downsampling]
         #
@@ -52,22 +55,22 @@ class NOCSDataset(data.Dataset):
         return self.length
 
     def __getitem__(self, index):
-        # ¸ù¾İindexÀ´Æ´½Óimg_listÖĞµÄÂ·¾¶
+        # æ ¹æ®indexæ¥æ‹¼æ¥img_listä¸­çš„è·¯å¾„
         img_path = pjoin(self.dataset_path, self.img_list[index])
         gt_label_path = pjoin(self.result_path, 'gt_label', self.img_list[index])
-        rgb = cv2.imread(img_path + '_color.png')[:, :, :3]  # ¶ÁÈ¡ÈıÍ¨µÀ²ÊÉ«Í¼Ïñ
-        rgb = rgb[:, :, ::-1]  # ×îºóÒ»¸öÍ¨µÀµ¹Ğò
-        depth = load_depth(img_path)  # Éî¶ÈÍ¼Ö»ÓĞµ¥Í¨µÀ
-        mask = cv2.imread(img_path + '_mask.png')[:, :, 2]  # maskÖ»ĞèÒªÒ»¸öÍ¨µÀ¼´¿É
-        coord = cv2.imread(img_path + '_coord.png')[:, :, :3]  # coordĞèÒªÇ°Èı¸öÍ¨µÀ
-        coord = coord[:, :, (2, 1, 0)]  # µßµ¹¸÷Í¨µÀË³Ğò
-        coord = np.array(coord, dtype=np.float32) / 255  # nocsÍ¼ÖµÎª0µ½1
+        rgb = cv2.imread(img_path + '_color.png')[:, :, :3]  # è¯»å–ä¸‰é€šé“å½©è‰²å›¾åƒ
+        rgb = rgb[:, :, ::-1]  # æœ€åä¸€ä¸ªé€šé“å€’åº
+        depth = load_depth(img_path)  # æ·±åº¦å›¾åªæœ‰å•é€šé“
+        mask = cv2.imread(img_path + '_mask.png')[:, :, 2]  # maskåªéœ€è¦ä¸€ä¸ªé€šé“å³å¯
+        coord = cv2.imread(img_path + '_coord.png')[:, :, :3]  # coordéœ€è¦å‰ä¸‰ä¸ªé€šé“
+        coord = coord[:, :, (2, 1, 0)]  # é¢ å€’å„é€šé“é¡ºåº
+        coord = np.array(coord, dtype=np.float32) / 255  # nocså›¾å€¼ä¸º0åˆ°1
         coord[:, :, 2] = 1 - coord[:, :, 2]
-        # ¶ÁÈ¡pklÎÄ¼şÀ´»ñµÃground truth
-        # ÆäÖĞ´æ´¢ÁËÀà±êÇ©class_ids,°üÎ§ºĞbboxes(2D), ³ß´çscale, rotations, translations, ÊµÀıinstance_ids, model_list
+        # è¯»å–pklæ–‡ä»¶æ¥è·å¾—ground truth
+        # å…¶ä¸­å­˜å‚¨äº†ç±»æ ‡ç­¾class_ids,åŒ…å›´ç›’bboxes(2D), å°ºå¯¸scale, rotations, translations, å®ä¾‹instance_ids, model_list
         with open(gt_label_path + '_label.pkl', 'rb') as f:
             gts = cPickle.load(f)
-        # ¶ÁÈ¡Ïà»úÄÚ²Î
+        # è¯»å–ç›¸æœºå†…å‚
         #if 'CAMERA' in img_path.split('/'):
         if 'CAMERA' == self.img_list[index].split('/')[0]:
             cam_fx, cam_fy, cam_cx, cam_cy = self.camera_intrinsics
@@ -75,31 +78,31 @@ class NOCSDataset(data.Dataset):
             cam_fx, cam_fy, cam_cx, cam_cy = self.real_intrinsics
 
         # select one foreground object
-        # Ëæ»úÑ¡ÔñÍ¼Æ¬ÖĞÒ»¸öÊµÀı
+        # éšæœºé€‰æ‹©å›¾ç‰‡ä¸­ä¸€ä¸ªå®ä¾‹
         idx = random.randint(0, len(gts['instance_ids']) - 1)
         inst_id = gts['instance_ids'][idx]
-        # ¶ÁÈ¡bbox
-        # ºá×İ4¸ö×ø±ê
+        # è¯»å–bbox
+        # æ¨ªçºµ4ä¸ªåæ ‡
         rmin, rmax, cmin, cmax = get_bbox(gts['bboxes'][idx])
         # sample points
-        # ¸ù¾İ»ñµÃ¸ÃÊµÀı¶ÔÓ¦µÄmask,²¢Ê¹ÓÃmaskµÄdepthÒ»Æğ»ñµÃµã
+        # æ ¹æ®è·å¾—è¯¥å®ä¾‹å¯¹åº”çš„mask,å¹¶ä½¿ç”¨maskçš„depthä¸€èµ·è·å¾—ç‚¹
         mask = np.equal(mask, inst_id)
         mask = np.logical_and(mask, depth > 0)
-        # maskÏÈÊÇÌáÈ¡ÖµµÈÓÚinst_idµÄÏñËØ
-        # È»ºóºÍdepth½øĞĞÂß¼­and²Ù×÷µÃµ½ÏñËØ
-        # Æ½ÆÌºóµÃµ½·ÇÁãÔªËØÎ»ÖÃ
+        # maskå…ˆæ˜¯æå–å€¼ç­‰äºinst_idçš„åƒç´ 
+        # ç„¶åå’Œdepthè¿›è¡Œé€»è¾‘andæ“ä½œå¾—åˆ°åƒç´ 
+        # å¹³é“ºåå¾—åˆ°éé›¶å…ƒç´ ä½ç½®
         choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()[0]
 
         if len(choose) > self.n_pts:
-            # Èç¹ûµãÌ«¶à£¬Ëæ»ú²ÉÑùĞèÒªÊıÁ¿n_ptsµÄµã
-            # ´´½¨Ò»¸öºÍchooseÒ»Ñù³¤µÄÈ«ÁãÒ»Î¬Êı×é,È»ºóÇ°n_pts¸öµã¸³ÖµÎª1
+            # å¦‚æœç‚¹å¤ªå¤šï¼Œéšæœºé‡‡æ ·éœ€è¦æ•°é‡n_ptsçš„ç‚¹
+            # åˆ›å»ºä¸€ä¸ªå’Œchooseä¸€æ ·é•¿çš„å…¨é›¶ä¸€ç»´æ•°ç»„,ç„¶åå‰n_ptsä¸ªç‚¹èµ‹å€¼ä¸º1
             c_mask = np.zeros(len(choose), dtype=int)
             c_mask[:self.n_pts] = 1
             np.random.shuffle(c_mask)
-            # Ëæ»ú²ÉÑù
+            # éšæœºé‡‡æ ·
             choose = choose[c_mask.nonzero()]
         else:
-            # Èç¹ûµãµÄÊıÁ¿Ğ¡ÓÚµÈÓÚn_pts,Ìî³ä¹»n_pts
+            # å¦‚æœç‚¹çš„æ•°é‡å°äºç­‰äºn_pts,å¡«å……å¤Ÿn_pts
             choose = np.pad(choose, (0, self.n_pts - len(choose)), 'wrap')
         depth_masked = depth[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]  # (n_pts,1)
         xmap_masked = self.xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]
@@ -107,9 +110,9 @@ class NOCSDataset(data.Dataset):
         pt2 = depth_masked / self.norm_scale
         pt0 = (xmap_masked - cam_cx) * pt2 / cam_fx
         pt1 = (ymap_masked - cam_cy) * pt2 / cam_fy
-        points = np.concatenate((pt0, pt1, pt2), axis=1)  # Éî¶È»Ö¸´µãÔÆ
-        # reshape((-1,3))½«(H,W,3)->(H*W,3) Ê¹ÓÃchooseË÷ÒıÈÔÈ»ÄÜ¹»»ñµÃ¶ÔÓ¦µÄÖµ
-        # ´ÓnocsÍ¼ÖĞÈ¡³ö¶ÔÓ¦µÄµã×ø±ê,¼õÈ¥0.5
+        points = np.concatenate((pt0, pt1, pt2), axis=1)  # æ·±åº¦æ¢å¤ç‚¹äº‘
+        # reshape((-1,3))å°†(H,W,3)->(H*W,3) ä½¿ç”¨chooseç´¢å¼•ä»ç„¶èƒ½å¤Ÿè·å¾—å¯¹åº”çš„å€¼
+        # ä»nocså›¾ä¸­å–å‡ºå¯¹åº”çš„ç‚¹åæ ‡,å‡å»0.5
         nocs = coord[rmin:rmax, cmin:cmax, :].reshape((-1, 3))[choose, :] - 0.5
         # resize cropped image to standard size and adjust 'choose' accordingly
         rgb = rgb[rmin:rmax, cmin:cmax, :]
@@ -127,7 +130,7 @@ class NOCSDataset(data.Dataset):
         rotation = gts['rotations'][idx]
         translation = gts['translations'][idx]
         # data augmentation
-        # ÑµÁ·Ä£Ê½ÏÂ,¶Ô²ÊÉ«Í¼rgb,µãÔÆpoints¶¼Ê©¼Ó¸ÉÈÅ
+        # è®­ç»ƒæ¨¡å¼ä¸‹,å¯¹å½©è‰²å›¾rgb,ç‚¹äº‘pointséƒ½æ–½åŠ å¹²æ‰°
         if self.mode == 'train':
             # color jitter
             rgb = self.colorjitter(Image.fromarray(np.uint8(rgb)))
