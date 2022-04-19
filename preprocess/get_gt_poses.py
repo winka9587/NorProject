@@ -59,7 +59,7 @@ def get_pose(root_path, folders, intrinsics, flip=True, real=False):
         # 结果存于valid_data数组中
         valid_data = [file[:4] for file in os.listdir(file_path) if file.endswith('color.png')]
         valid_data.sort()
-        for prefix in valid_data:
+        for prefix in tqdm(valid_data):
             """
             if real or not os.path.exists(pjoin(file_path, f'{prefix}_composed.png')):
                 depth = cv2.imread(pjoin(file_path, f'{prefix}_depth.png'), -1)
@@ -107,6 +107,7 @@ def get_pose(root_path, folders, intrinsics, flip=True, real=False):
                 poses = get_image_pose(len(lines), mask, coord, depth, intrinsics)
                 with open(pjoin(file_path, f'{prefix}_pose.pkl'), 'wb') as f:
                     pickle.dump(poses, f)
+
 
 def parse_args():
     parser = argparse.ArgumentParser()

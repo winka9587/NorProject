@@ -13,7 +13,7 @@ sys.path.insert(0, pjoin(BASEPATH, '..'))
 sys.path.insert(0, pjoin(BASEPATH, '..', '..', '..'))
 
 from utils import ensure_dirs
-from nocs_utils import backproject, project, get_corners, bbox_from_corners
+from captra_utils.utils_from_captra import backproject, project, get_corners, bbox_from_corners
 from tqdm import tqdm
 
 
@@ -32,7 +32,7 @@ def gather_instance(list_path, data_path, model_path, output_path, instance, int
     corners = np.load(pjoin(model_path, f'{instance}.npy'))
     bbox = bbox_from_corners(corners)
     bbox *= 1.4  # 包围盒大小乘以1.4
-    # 获得实例的所有路径
+    # 获得有实例模型instance的所有路径
     meta_path = pjoin(list_path, f'{instance}.txt')
     with open(meta_path, 'r') as f:
         lines = f.readlines()
@@ -85,7 +85,7 @@ def gather_instance(list_path, data_path, model_path, output_path, instance, int
             depth, mask, rgb = depth[:, ::-1], mask[:, ::-1], rgb[:, ::-1]
         # 初始时inst_num的值为-1
         inst_num = -1
-        # 遍历_meta.txt中的每一行
+        # 遍历_meta.txt中的每一行, 找到目标instance
         for meta_line in meta_lines:
             # 例:meta_line为"1 6 mug2_scene3_norm"
             # inst_num 为 1
@@ -95,7 +95,7 @@ def gather_instance(list_path, data_path, model_path, output_path, instance, int
             inst_id = meta_line.split()[-1]
             # instance是来自instance_list目录下的instance.txt中读取的
             # inst_id则是从_meta.txt中读取的
-            # 当meta中的某一行的实例与当前搜索的一致时,跳出循环(看来一个场不会出现重复的实例)
+            # 当meta中的某一行的实例与当前搜索的一致时,跳出循环(看来一张图片中不会出现重复的实例)
             if inst_id == instance:
                 break
 

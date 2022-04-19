@@ -1,105 +1,52 @@
 import math
 import numpy as np
 import torch.utils.data as data
+import os
 from os.path import join as pjoin
 import cv2
 from utils import ensure_dir
 from captra_utils.utils_from_captra import load_depth
 import _pickle as cPickle
+from dataset_process import split_nocs_dataset
 
-# result_path:
+
 # result_path:
 #       --img_list
 # mode: [train, test]
 # source: [Real, CAMERA, Real_CAMERA]
 class NOCSDataset(data.Dataset):
-    def __init__(self, dataset_path, result_path, obj_category, mode, source, n_points=4096, augment=False):
+    def __init__(self, dataset_path, result_path, obj_category, mode, n_points=4096, bad_ins=None, opt=None):
         assert (mode == 'train' or mode == 'val'), 'Mode must be "train" or "val".'
         self.dataset_path = dataset_path
         self.result_path = result_path
         self.obj_category = obj_category
         self.mode = mode
         self.n_points = n_points
-        self.augment = augment
+        self.opt = opt
+        self.file_list = self.collect_data()
+        self.len = len(self.file_list)
+        self.bad_ins = bad_ins  # bad_ins是一个数组,存储实例模型名，将不好的实例从数据集file_list中剔除
 
-        # augmentation parameters
-        self.sigma = 0.01
-        self.clip = 0.02
-        self.shift_range = 0.02
 
-        # img_list
-        img_list_path = ['CAMERA/train_list.txt', 'Real/train_list.txt',
-                         'CAMERA/val_list.txt', 'Real/test_list.txt']
-        model_file_path = ['obj_models/camera_train.pkl', 'obj_models/real_train.pkl',
-                           'obj_models/camera_val.pkl', 'obj_models/real_test.pkl']
-        # 根据使用的数据集来选择从_path中删去哪些txt和pkl文件
-        if mode == 'train':
-            del img_list_path[2:]
-            del model_file_path[2:]
-        else:
-            del img_list_path[:2]
-            del model_file_path[:2]
-
-        if source == 'CAMERA':
-            del img_list_path[-1]
-            del model_file_path[-1]
-        elif source == 'Real':
-            del img_list_path[0]
-            del model_file_path[0]
-        else:
-            # only use Real to test when source is CAMERA+Real
-            if mode == 'test':
-                del img_list_path[0]
-                del model_file_path[0]
-        img_list = []  # 存储从img_list下的txt中读取的前缀路径
-        subset_len = []  # 存储txt中的文件数量，用来切分img_list数组
-        for path in img_list_path:
-            # 读取_list.txt文件,其中的每一行都是train/0000/0000的格式
-            # 去掉换行符,path.split取CAMERA
-            # 最后得到CAMERA/train/0000/0000模板的路径存入img_list中
-            img_list += [pjoin(path.split('/')[0], line.rstrip('\n'))
-                         for line in open(pjoin(self.result_path, 'img_list', path))]
-            subset_len.append(len(img_list))
-        # 因为source和mode筛选的原因,最终img_list_path中剩下的只有可能是1个或2个
-        # 如果只有1个,那么append添加的就是length
-        # 如果有两个,因为img_list是不清空的,所以需要第2个-第1个
-        if len(subset_len) == 2:
-            self.subset_len = [subset_len[0], subset_len[1] - subset_len[0]]
-        self.img_list = img_list
-        self.length = len(self.img_list)
-
-        # 读取点云
-        models = {}
-        for path in model_file_path:
-            with open(pjoin(self.dataset_path, path), 'rb') as f:
-                models.update(cPickle.load(f))  # update将一个集合插入另一个集合
-        self.models = models
-
-        # meta info for re-label mug category
-        with open(pjoin(self.dataset_path, 'obj_models/mug_meta.pkl'), 'rb') as f:
-            self.mug_meta = cPickle.load(f)
-
-        # 读取读取embedding
-        # self.mean_shapes = np.load('assets/mean_points_emb.npy')
-        self.cat_names = ['bottle', 'bowl', 'camera', 'can', 'laptop', 'mug']
-        self.camera_intrinsics = [577.5, 577.5, 319.5, 239.5]  # [fx, fy, cx, cy]
-        self.real_intrinsics = [591.0125, 590.16775, 322.525, 244.11084]
-        self.sym_ids = [0, 1, 3]  # 0-indexed
-        self.norm_scale = 1000.0  # normalization scale
-        # 生成的xmap
-        # [
-        # [ 0,1,2,...],
-        # [ 0,1,2,...],
-        # ...]
-        self.xmap = np.array([[i for i in range(640)] for j in range(480)])
-        self.ymap = np.array([[j for i in range(640)] for j in range(480)])
-        self.shift_range = 0.01
-        self.colorjitter = transforms.ColorJitter(0.2, 0.2, 0.2, 0.05)
-        self.transform = transforms.Compose([transforms.ToTensor(),
-                                             transforms.Normalize(mean=[0.485, 0.456, 0.406],
-                                                                  std=[0.229, 0.224, 0.225])])
-        print('{} images found.'.format(self.length))
-        print('{} models loaded.'.format(len(self.models)))
+    def collect_data(self):
+        # ../data/nocs_data/splits/1/1_bottle_rot
+        splits_path = pjoin(self.dataset_path, "splits", self.obj_category, self.num_expr)
+        idx_txt = pjoin(splits_path, f'{self.mode}.txt')
+        print(f'NOCSDataSet load data from {idx_txt}')
+        # 如果没有{mode}.txt，使用split_nocs_dataset函数生成一个
+        splits_ready = os.path.exists(idx_txt)
+        if not splits_ready:
+            split_nocs_dataset(self.root_dset, self.obj_category, self.num_expr, self.mode, self.bad_ins)
+        # 读取mode.txt文件
+        with open(idx_txt, "r", errors='replace') as fp:
+            lines = fp.readlines()
+            file_list = [line.strip() for line in lines]  # 将每一行的npz文件路径存入file_list中
+        # if downsampling is not None:
+        #     file_list = file_list[::downsampling]
+        #
+        # if truncate_length is not None:
+        #     file_list = file_list[:truncate_length]
+        return file_list
 
     def __len__(self):
         return self.length
@@ -216,3 +163,14 @@ class NOCSDataset(data.Dataset):
         nocs = nocs.astype(np.float32)
 
         return points, rgb, choose, cat_id, model, prior, sRT, nocs
+
+if __name__ == "__main__":
+    dataset_path = '/data1/cxx/Lab_work/dataset'
+    result_path = '/data1/cxx/Lab_work/results'
+    obj_category = 1
+    mode = 'train'
+    dataset = NOCSDataset(dataset_path,
+                          result_path,
+                          obj_category,
+                          mode)
+

@@ -99,3 +99,18 @@ def ensure_dirs(paths):
             ensure_dir(path)
     else:
         ensure_dir(paths)
+
+class Timer:
+    def __init__(self, on):
+        self.on = on
+        self.cur = time.time()
+
+    def tick(self, str=None):
+        if not self.on:
+            return
+        cur = time.time()
+        diff = cur - self.cur
+        self.cur = cur
+        if str is not None:
+            print(str, diff)
+        return diff

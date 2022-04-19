@@ -9,6 +9,7 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import _pickle as cPickle
+import torch
 
 
 def setup_logger(logger_name, log_file, level=logging.INFO):
@@ -830,7 +831,6 @@ def draw_detections(img, out_dir, data_name, img_id, intrinsics, pred_sRT, pred_
 
 def backproject(depth, intrinsics=np.array([[577.5, 0, 319.5], [0., 577.5, 239.5], [0., 0., 1.]]),
                 mask=None, scale=0.001):
-    print('back project: 2D to 3D')
     intrinsics_inv = np.linalg.inv(intrinsics)
     image_shape = depth.shape
     width = image_shape[1]
@@ -846,12 +846,10 @@ def backproject(depth, intrinsics=np.array([[577.5, 0, 319.5], [0., 577.5, 239.5
 
     # ===========
     # 可视化最终的2D mask点
-    print(final_instance_mask)
-    viz_mask = np.zeros(mask.shape)
-    index = np.where(1-final_instance_mask)
-    print(len(index[0]))
-    for i in range(len(index[0])):
-        viz_mask[index[0][i]][index[1][i]] = 255
+    # viz_mask = np.zeros(mask.shape)
+    # index = np.where(1-final_instance_mask)
+    # for i in range(len(index[0])):
+    #     viz_mask[index[0][i]][index[1][i]] = 255
     # 获取到一个实例对象的2D点
     # cv2.imshow('final_instance_mask', viz_mask)
     # cv2.waitKey(0)
@@ -881,6 +879,41 @@ def backproject(depth, intrinsics=np.array([[577.5, 0, 319.5], [0., 577.5, 239.5
 
     # 返回3D坐标(单位已经转换为cm)和2D图像坐标idxs
     return pts * scale, idxs
+
+
+def project(pts, intrinsics, scale=1000):  # not flipping y axis
+    pts = pts * scale
+    pts = -pts / pts[:, -1:]
+    pts[:, -1] = -pts[:, -1]
+    pts = np.transpose(intrinsics @ np.transpose(pts))[:, :2]
+    return pts
+
+
+# 输入:[中心点减半径,中心点加半径]
+#
+def get_corners(points):  # [Bs, N, 3] -> [Bs, 2, 3]
+    if isinstance(points, torch.Tensor):
+        points = np.array(points.detach().cpu())
+    pmin = np.min(points, axis=-2) # [Bs, N, 3] -> [Bs, 3]
+    pmax = np.max(points, axis=-2) # [Bs, N, 3] -> [Bs, 3]
+    return np.stack([pmin, pmax], axis=-2)
+
+
+def bbox_from_corners(corners):  # corners [[3], [3]] or [Bs, 2, 3]
+    # 确保corners是n维数组
+    if not isinstance(corners, np.ndarray):
+        corners = np.array(corners)
+
+    # bbox = np.zeros((8, 3))
+    bbox_shape = corners.shape[:-2] + (8, 3)  # [Bs, 8, 3]
+    bbox = np.zeros(bbox_shape)
+    for i in range(8):
+        x, y, z = (i % 4) // 2, i // 4, i % 2
+        bbox[..., i, 0] = corners[..., x, 0]
+        bbox[..., i, 1] = corners[..., y, 1]
+        bbox[..., i, 2] = corners[..., z, 2]
+    return bbox
+
 
 def remove_border(mask, kernel_size=2):  # enlarge the region w/ 255
     # print((255 - mask).sum())

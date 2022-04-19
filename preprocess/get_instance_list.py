@@ -7,9 +7,9 @@ from os.path import join as pjoin
 import argparse
 from tqdm import tqdm
 
-BASEPATH = os.path.dirname(__file__)
-sys.path.insert(0, pjoin(BASEPATH, '..', '..', '..'))
-
+# BASEPATH = os.path.dirname(__file__)
+# sys.path.insert(0, pjoin(BASEPATH, '..', '..', '..'))
+sys.path.append('..')
 from utils import ensure_dirs
 
 # root_path是nocs_full/train或val或xxx
@@ -108,6 +108,7 @@ def main(args):
     # }
 
     # 在nocs_data\instance_list\data_type目录下,为每个类创建一个目录,1,2,3,4,5,6共6个
+    # 每个类下面有多个实例的txt，其中保存了
     for cls_id in data_list:
         cur_path = pjoin(output_path, str(cls_id))
         ensure_dirs(cur_path)
