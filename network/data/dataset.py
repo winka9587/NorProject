@@ -1,14 +1,21 @@
 # coding=utf-8
 import math
 import numpy as np
-import torch.utils.data as data
 import os
+import sys
+sys.path.append(os.path.dirname(__file__))
+# # 指定显卡
+# device_ids = "2,3"
+# os.environ['CUDA_VISIBLE_DEVICES'] = device_ids
+import torch
+from torch.utils.data import Dataset, DataLoader
+
 from os.path import join as pjoin
 import cv2
 from utils import ensure_dir
 from captra_utils.utils_from_captra import load_depth
 import _pickle as cPickle
-from dataset_process import split_nocs_dataset, read_cloud
+from dataset_process import split_nocs_dataset, read_cloud, base_generate_data
 
 
 # 读取实例模型对应的npy文件
@@ -34,12 +41,15 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
     #               pose: {rotation, scale, translation}
     #               path: /data1/cxx/Lab_work/dataset/nocs_full/train/00045/0006_composed.png
     # }
+    # 返回采样后的相机坐标系下点云, 对应mask点云, 扰动后的位姿
     cam_points, seg, perturbed_pose = read_cloud(cloud_dict, num_points, radius, perturb_cfg, device)
     if cam_points is None:
         return None
+    # 传入的是未扰动的gt位姿
     full_data = base_generate_data(cam_points, seg, cloud_dict['pose'])
-    full_data['ori_path'] = cloud_dict['path']
+    full_data['ori_path'] = cloud_dict['path']  # 将路径和扰动位姿也存入字典
     full_data['crop_pose'] = [perturbed_pose]
+    # real数据集还要额外读取深度图和mask(单个实例的)
     if 'real' in mode:
         depth_path = cloud_dict['path']
         depth = cv2.imread(depth_path, -1)
@@ -57,6 +67,15 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
     else:
         full_data['pre_fetched'] = {}
 
+    # full_data: {
+    # 'points': cam_points,
+    # 'labels': 1 - seg,
+    # 'nocs': nocs,
+    # 'nocs2camera': [pose]
+    # 'ori_path': cloud_dict['path']  # 将路径和扰动位姿也存入字典
+    # 'crop_pose': [perturbed_pose]
+    # 'pre_fetched': {'depth': depth.astype(np.int16), 'mask': mask}
+    # }
     return full_data
 
 
@@ -67,27 +86,34 @@ def read_nocs_pose(root_dset, mode, obj_category, instance, track_num, frame_i):
     cloud_dict = np.load(cloud_path, allow_pickle=True)['all_dict'].item()
     pose = cloud_dict['pose']
     return pose
+
+
 # result_path:
 #       --img_list
 # obj_category: [1, 2, 3, 4, 5, 6]
 # mode: [train, test]
 # source: [Real, CAMERA, Real_CAMERA]
-class NOCSDataset(data.Dataset):
-    def __init__(self, dataset_path, result_path, obj_category, mode, num_expr, n_points=4096, bad_ins=[], opt=None):
+class NOCSDataset(Dataset):
+    def __init__(self, dataset_path, result_path, obj_category, mode, num_expr, num_points=4096, radius=0.6,
+                 bad_ins=[], perturb_cfg=None, device=None, opt=None):
+        print('Initializing NOCSDataset ...')
         assert (mode == 'train' or mode == 'val'), 'Mode must be "train" or "val".'
         self.dataset_path = dataset_path
         self.result_path = result_path
         self.obj_category = obj_category
         self.mode = mode
         self.num_expr = num_expr  # 一个名字，区分不同的实验的数据
-        self.n_points = n_points
+        self.num_points = num_points
+        self.radius = radius
+        self.perturb_cfg = perturb_cfg
+        self.device = device
         self.opt = opt
         self.bad_ins = bad_ins  # bad_ins是一个数组,存储实例模型名，将不好的实例从数据集file_list中剔除
         self.file_list = self.collect_data()
         self.len = len(self.file_list)
         self.nocs_corner_dict = {}  # instance x (1, 2, 3)
         self.invalid_dict = {}      # 存储invalid的下标
-
+        print('Successfully Initialized NOCSDataset ...')
 
 
     def collect_data(self):
@@ -138,6 +164,15 @@ class NOCSDataset(data.Dataset):
             full_data = generate_nocs_data(self.dataset_path, self.mode, self.obj_category, instance,
                                            track_num, frame_i, self.num_points, self.radius,
                                            self.perturb_cfg, self.device)
+            # full_data: {
+            # 'points': cam_points,
+            # 'labels': 1 - seg,
+            # 'nocs': nocs,
+            # 'nocs2camera': [pose]
+            # 'ori_path': cloud_dict['path']  # 将路径和扰动位姿也存入字典
+            # 'crop_pose': [perturbed_pose]
+            # 'pre_fetched': {'depth': depth.astype(np.int16), 'mask': mask}
+            # }
             if full_data is None:
                 self.invalid_dict[index] = True
         if index in self.invalid_dict:
@@ -148,12 +183,12 @@ class NOCSDataset(data.Dataset):
         ori_path = full_data.pop('ori_path')
         pre_fetched = full_data.pop('pre_fetched')
         return {'data': full_data,
-                'meta': {'path': fake_path,
-                         'ori_path': ori_path,
-                         'nocs2camera': nocs2camera,
-                         'crop_pose': crop_pose,
-                         'pre_fetched': pre_fetched,
-                         'nocs_corners': self.nocs_corner_dict[instance]
+                'meta': {'path': fake_path,             # .npz路径
+                         'ori_path': ori_path,          # png路径
+                         'nocs2camera': nocs2camera,    # gt位姿
+                         'crop_pose': crop_pose,        # 扰动位姿
+                         'pre_fetched': pre_fetched,    # real 数据集 depth和mask, CAMERA数据集为None
+                         'nocs_corners': self.nocs_corner_dict[instance]    # (1, 2, 3) bbox？角点
                          }
                 }
 
@@ -164,11 +199,24 @@ if __name__ == "__main__":
     obj_category = '1'
     mode = 'train'
     num_expr = 'exp_tmp'
+    device = torch.device("cuda:0")
     dataset = NOCSDataset(dataset_path=dataset_path,
                           result_path=result_path,
                           obj_category=obj_category,
                           mode=mode,
-                          num_expr=num_expr)
-    print('end')
+                          num_expr=num_expr,
+                          device=device)
+    print(f'Successfully Load NOCSDataSet {num_expr}_{mode}_{obj_category}')
+    batch_size = 2
+    total_epoch = 250
+    shuffle = (mode == 'train')
+    num_workers = 0
+
+    train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
+
+    for i, data in enumerate(train_dataloader):
+        print(f'data index {i}')
+        print(data)
+
 
 

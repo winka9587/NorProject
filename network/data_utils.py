@@ -1,7 +1,7 @@
 import numpy as np
 import pickle
 import os.path
-import trimesh
+# import trimesh
 import glob
 import torch
 import os
@@ -15,9 +15,9 @@ import xml.etree.ElementTree as ET
 import matplotlib.pyplot as plt
 plt.ioff()
 
-from transformations import euler_matrix, quaternion_matrix
-from misc.visualize.vis_utils import plot3d_pts
-from network.models.pointnet_utils import farthest_point_sample as farthest_point_sample_cuda
+# from transformations import euler_matrix, quaternion_matrix
+# from misc.visualize.vis_utils import plot3d_pts
+from model.pointnet_utils import farthest_point_sample as farthest_point_sample_cuda
 from utils import ensure_dirs
 
 import cv2

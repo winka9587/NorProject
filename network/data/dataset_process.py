@@ -20,6 +20,8 @@ from utils import Timer
 nocs_real_cam_intrinsics = np.array([[591.0125, 0, 322.525], [0, 590.16775, 244.11084], [0, 0, 1]])
 
 
+# 读取render下的.npz文件中的点云和位姿
+# 返回采样后的相机坐标系下点云, 对应mask点云, 扰动后的位姿
 def read_cloud(cloud_dict, num_points, radius_factor, perturb_cfg, device):
     cam = cloud_dict['points']  # 相机坐标系下的点云 nx3, len(cam)的值为n
     if len(cam) == 0:
@@ -36,12 +38,14 @@ def read_cloud(cloud_dict, num_points, radius_factor, perturb_cfg, device):
                       'scale': float(scale)}
 
     radius = float(scale * radius_factor)
-    # 输入观测点云+位移+半径
+    # 返回FPS采样结果的下标
     idx = crop_ball_from_pts(cam, center, radius, num_points=num_points, device=device)
 
+    # 返回采样后的相机坐标系下点云, 对应mask点云, 扰动后的位姿
     return cam[idx], seg[idx], perturbed_pose
 
 
+# 观测点云计算对应的nocs点云
 def base_generate_data(cam_points, seg, pose):
     nocs = np.zeros_like(cam_points)
     idx = np.where(seg == 1)[0]
@@ -101,11 +105,11 @@ def split_nocs_dataset(root_dset, obj_category, num_expr, mode, bad_ins=[]):
 # 返回最远点采样的结果
 def crop_ball_from_pts(pts, center, radius, num_points=None, device=None):
     # 计算所有点到中心点的距离
-    # 相当于对冗余点进行了处理 
+    # 相当于对冗余点进行了处理
     distance = np.sqrt(np.sum((pts - center) ** 2, axis=-1))  # [N]
     radius = max(radius, 0.05)  # 最大半径为0.05
     for i in range(10):
-        # 以中心点为圆心,radius为半径画圆,选出包含的的点
+        # 以中心点为圆心,radius为半径画圆,选出包含的的点,一般情况下,默认的半径0.6会包含所有的点
         idx = np.where(distance <= radius)[0]
         # 如果包含的点数量少于10个,或者没有指定num_points,将半径增大为原来的1.1倍
         if len(idx) >= 10 or num_points is None:
