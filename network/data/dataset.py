@@ -1,4 +1,4 @@
-#coding=utf-8
+# coding=utf-8
 import math
 import numpy as np
 import torch.utils.data as data
@@ -8,26 +8,85 @@ import cv2
 from utils import ensure_dir
 from captra_utils.utils_from_captra import load_depth
 import _pickle as cPickle
-from dataset_process import split_nocs_dataset
+from dataset_process import split_nocs_dataset, read_cloud
 
 
+# 读取实例模型对应的npy文件
+def generate_nocs_corners(dataset_path, instance):
+    obj_path = pjoin(dataset_path, 'model_corners', f'{instance}.npy')
+    nocs_corners = np.load(obj_path).reshape(1, -1, 3)  # shape (2, 3) -> (1, 2, 3)
+    return nocs_corners
+
+
+def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame_i, num_points, radius, perturb_cfg,
+                       device):
+    # instance      109d55a137c042f5760315ac3bf2c13e
+    # track_num     0000
+    # _,            data
+    # frame_i:      00
+    # path: ../dataset/render/train/1/109d55a137c042f5760315ac3bf2c13e/0000
+    path = pjoin(root_dset, 'render', mode, obj_category, instance, f'{track_num}')
+    # path to load .npz
+    cloud_path = pjoin(path, 'data', f'{frame_i}.npz')
+    cloud_dict = np.load(cloud_path, allow_pickle=True)['all_dict'].item()  # ndarray.item()仅适用于有一个元素的数组，将其转换为python的标量返回
+    # cloud_dict = {points: (n, 3)
+    #               labels: (n, )
+    #               pose: {rotation, scale, translation}
+    #               path: /data1/cxx/Lab_work/dataset/nocs_full/train/00045/0006_composed.png
+    # }
+    cam_points, seg, perturbed_pose = read_cloud(cloud_dict, num_points, radius, perturb_cfg, device)
+    if cam_points is None:
+        return None
+    full_data = base_generate_data(cam_points, seg, cloud_dict['pose'])
+    full_data['ori_path'] = cloud_dict['path']
+    full_data['crop_pose'] = [perturbed_pose]
+    if 'real' in mode:
+        depth_path = cloud_dict['path']
+        depth = cv2.imread(depth_path, -1)
+        with open(depth_path.replace('depth.png', 'meta.txt'), 'r') as f:
+            meta_lines = f.readlines()
+        inst_num = -1
+        for meta_line in meta_lines:
+            inst_num = int(meta_line.split()[0])
+            inst_id = meta_line.split()[-1]
+            if inst_id == instance:
+                break
+        mask = cv2.imread(depth_path.replace('depth', 'mask'))[:, :, 2]
+        mask = (mask == inst_num)
+        full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask}
+    else:
+        full_data['pre_fetched'] = {}
+
+    return full_data
+
+
+def read_nocs_pose(root_dset, mode, obj_category, instance, track_num, frame_i):
+
+    path = pjoin(root_dset, 'render', mode, obj_category, instance, f'{track_num}')
+    cloud_path = pjoin(path, 'data', f'{frame_i}.npz')
+    cloud_dict = np.load(cloud_path, allow_pickle=True)['all_dict'].item()
+    pose = cloud_dict['pose']
+    return pose
 # result_path:
 #       --img_list
 # obj_category: [1, 2, 3, 4, 5, 6]
 # mode: [train, test]
 # source: [Real, CAMERA, Real_CAMERA]
 class NOCSDataset(data.Dataset):
-    def __init__(self, dataset_path, result_path, obj_category, mode, n_points=4096, bad_ins=None, opt=None):
+    def __init__(self, dataset_path, result_path, obj_category, mode, num_expr, n_points=4096, bad_ins=[], opt=None):
         assert (mode == 'train' or mode == 'val'), 'Mode must be "train" or "val".'
         self.dataset_path = dataset_path
         self.result_path = result_path
         self.obj_category = obj_category
         self.mode = mode
+        self.num_expr = num_expr  # 一个名字，区分不同的实验的数据
         self.n_points = n_points
         self.opt = opt
         self.bad_ins = bad_ins  # bad_ins是一个数组,存储实例模型名，将不好的实例从数据集file_list中剔除
         self.file_list = self.collect_data()
         self.len = len(self.file_list)
+        self.nocs_corner_dict = {}  # instance x (1, 2, 3)
+        self.invalid_dict = {}      # 存储invalid的下标
 
 
 
@@ -35,12 +94,14 @@ class NOCSDataset(data.Dataset):
         # ../data/nocs_data/splits/1/1_bottle_rot
         splits_path = pjoin(self.dataset_path, "splits", self.obj_category, self.num_expr)
         idx_txt = pjoin(splits_path, f'{self.mode}.txt')
-        print(f'NOCSDataSet load data from {idx_txt}')
+
         # 如果没有{mode}.txt，使用split_nocs_dataset函数生成一个
         splits_ready = os.path.exists(idx_txt)
         if not splits_ready:
-            split_nocs_dataset(self.root_dset, self.obj_category, self.num_expr, self.mode, self.bad_ins)
+            print(f'generating nocs dataset of category {self.num_expr}_{self.obj_category}_{self.mode} ...')
+            split_nocs_dataset(self.dataset_path, self.obj_category, self.num_expr, self.mode, self.bad_ins)
         # 读取mode.txt文件
+        print(f'NOCSDataSet loading category {self.obj_category} .npz file path from {idx_txt}')
         with open(idx_txt, "r", errors='replace') as fp:
             lines = fp.readlines()
             file_list = [line.strip() for line in lines]  # 将每一行的npz文件路径存入file_list中
@@ -52,128 +113,62 @@ class NOCSDataset(data.Dataset):
         return file_list
 
     def __len__(self):
-        return self.length
+        return self.len
 
     def __getitem__(self, index):
-        # 根据index来拼接img_list中的路径
-        img_path = pjoin(self.dataset_path, self.img_list[index])
-        gt_label_path = pjoin(self.result_path, 'gt_label', self.img_list[index])
-        rgb = cv2.imread(img_path + '_color.png')[:, :, :3]  # 读取三通道彩色图像
-        rgb = rgb[:, :, ::-1]  # 最后一个通道倒序
-        depth = load_depth(img_path)  # 深度图只有单通道
-        mask = cv2.imread(img_path + '_mask.png')[:, :, 2]  # mask只需要一个通道即可
-        coord = cv2.imread(img_path + '_coord.png')[:, :, :3]  # coord需要前三个通道
-        coord = coord[:, :, (2, 1, 0)]  # 颠倒各通道顺序
-        coord = np.array(coord, dtype=np.float32) / 255  # nocs图值为0到1
-        coord[:, :, 2] = 1 - coord[:, :, 2]
-        # 读取pkl文件来获得ground truth
-        # 其中存储了类标签class_ids,包围盒bboxes(2D), 尺寸scale, rotations, translations, 实例instance_ids, model_list
-        with open(gt_label_path + '_label.pkl', 'rb') as f:
-            gts = cPickle.load(f)
-        # 读取相机内参
-        #if 'CAMERA' in img_path.split('/'):
-        if 'CAMERA' == self.img_list[index].split('/')[0]:
-            cam_fx, cam_fy, cam_cx, cam_cy = self.camera_intrinsics
-        else:
-            cam_fx, cam_fy, cam_cx, cam_cy = self.real_intrinsics
+        # ../render/train/1/109d55a137c042f5760315ac3bf2c13e/0000/data/00.npz
+        path = self.file_list[index]
+        # ../render/train/1/109d55a137c042f5760315ac3bf2c13e/0000/data/00
+        # ///
+        last_name_list = path.split('.')[-2].split('/')
+        # instance      109d55a137c042f5760315ac3bf2c13e
+        # track_num     0000
+        # _,            data
+        # frame_i:      00
+        instance, track_num, _, frame_i = last_name_list[-4:]  # 可以看出 instance就是具体到哪个实例
+        fake_last_name = '/'.join(last_name_list[:-2] + last_name_list[-1:])  # 将[-2]也就是data丢弃掉
+        # fake_last_name:   ../render/train/1/109d55a137c042f5760315ac3bf2c13e/0000/00
+        fake_path = f'{fake_last_name}.pkl'  # 在和data同级目录创建一个pkl文件
 
-        # select one foreground object
-        # 随机选择图片中一个实例
-        idx = random.randint(0, len(gts['instance_ids']) - 1)
-        inst_id = gts['instance_ids'][idx]
-        # 读取bbox
-        # 横纵4个坐标
-        rmin, rmax, cmin, cmax = get_bbox(gts['bboxes'][idx])
-        # sample points
-        # 根据获得该实例对应的mask,并使用mask的depth一起获得点
-        mask = np.equal(mask, inst_id)
-        mask = np.logical_and(mask, depth > 0)
-        # mask先是提取值等于inst_id的像素
-        # 然后和depth进行逻辑and操作得到像素
-        # 平铺后得到非零元素位置
-        choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()[0]
+        if instance not in self.nocs_corner_dict:
+            # 如果当前的instance不在nocs_corner_dict中,读取该实例对应的npy文件
+            self.nocs_corner_dict[instance] = generate_nocs_corners(self.dataset_path, instance)
+        # 对不在黑名单中的实例
+        if index not in self.invalid_dict:
+            full_data = generate_nocs_data(self.dataset_path, self.mode, self.obj_category, instance,
+                                           track_num, frame_i, self.num_points, self.radius,
+                                           self.perturb_cfg, self.device)
+            if full_data is None:
+                self.invalid_dict[index] = True
+        if index in self.invalid_dict:
+            return self.__getitem__((index + 1) % self.len)
 
-        if len(choose) > self.n_pts:
-            # 如果点太多，随机采样需要数量n_pts的点
-            # 创建一个和choose一样长的全零一维数组,然后前n_pts个点赋值为1
-            c_mask = np.zeros(len(choose), dtype=int)
-            c_mask[:self.n_pts] = 1
-            np.random.shuffle(c_mask)
-            # 随机采样
-            choose = choose[c_mask.nonzero()]
-        else:
-            # 如果点的数量小于等于n_pts,填充够n_pts
-            choose = np.pad(choose, (0, self.n_pts - len(choose)), 'wrap')
-        depth_masked = depth[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]  # (n_pts,1)
-        xmap_masked = self.xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]
-        ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]
-        pt2 = depth_masked / self.norm_scale
-        pt0 = (xmap_masked - cam_cx) * pt2 / cam_fx
-        pt1 = (ymap_masked - cam_cy) * pt2 / cam_fy
-        points = np.concatenate((pt0, pt1, pt2), axis=1)  # 深度恢复点云
-        # reshape((-1,3))将(H,W,3)->(H*W,3) 使用choose索引仍然能够获得对应的值
-        # 从nocs图中取出对应的点坐标,减去0.5
-        nocs = coord[rmin:rmax, cmin:cmax, :].reshape((-1, 3))[choose, :] - 0.5
-        # resize cropped image to standard size and adjust 'choose' accordingly
-        rgb = rgb[rmin:rmax, cmin:cmax, :]
-        rgb = cv2.resize(rgb, (self.img_size, self.img_size), interpolation=cv2.INTER_LINEAR)
-        crop_w = rmax - rmin
-        ratio = self.img_size / crop_w
-        col_idx = choose % crop_w
-        row_idx = choose // crop_w
-        choose = (np.floor(row_idx * ratio) * self.img_size + np.floor(col_idx * ratio)).astype(np.int64)
-        # label
-        cat_id = gts['class_ids'][idx] - 1  # convert to 0-indexed
-        model = self.models[gts['model_list'][idx]].astype(np.float32)  # 1024 points
-        prior = self.mean_shapes[cat_id].astype(np.float32)
-        scale = gts['scales'][idx]
-        rotation = gts['rotations'][idx]
-        translation = gts['translations'][idx]
-        # data augmentation
-        # 训练模式下,对彩色图rgb,点云points都施加干扰
-        if self.mode == 'train':
-            # color jitter
-            rgb = self.colorjitter(Image.fromarray(np.uint8(rgb)))
-            rgb = np.array(rgb)
-            # point shift
-            add_t = np.random.uniform(-self.shift_range, self.shift_range, (1, 3))
-            translation = translation + add_t[0]
-            # point jitter
-            add_t = add_t + np.clip(0.001 * np.random.randn(points.shape[0], 3), -0.005, 0.005)
-            points = np.add(points, add_t)
-        rgb = self.transform(rgb)
-        points = points.astype(np.float32)
-        # adjust nocs coords for mug category
-        if cat_id == 5:
-            T0 = self.mug_meta[gts['model_list'][idx]][0]
-            s0 = self.mug_meta[gts['model_list'][idx]][1]
-            nocs = s0 * (nocs + T0)
-        # map ambiguous rotation to canonical rotation
-        if cat_id in self.sym_ids:
-            rotation = gts['rotations'][idx]
-            # assume continuous axis rotation symmetry
-            theta_x = rotation[0, 0] + rotation[2, 2]
-            theta_y = rotation[0, 2] - rotation[2, 0]
-            r_norm = math.sqrt(theta_x ** 2 + theta_y ** 2)
-            s_map = np.array([[theta_x / r_norm, 0.0, -theta_y / r_norm],
-                              [0.0, 1.0, 0.0],
-                              [theta_y / r_norm, 0.0, theta_x / r_norm]])
-            rotation = rotation @ s_map
-            nocs = nocs @ s_map
-        sRT = np.identity(4, dtype=np.float32)
-        sRT[:3, :3] = scale * rotation
-        sRT[:3, 3] = translation
-        nocs = nocs.astype(np.float32)
+        nocs2camera = full_data.pop('nocs2camera')
+        crop_pose = full_data.pop('crop_pose')
+        ori_path = full_data.pop('ori_path')
+        pre_fetched = full_data.pop('pre_fetched')
+        return {'data': full_data,
+                'meta': {'path': fake_path,
+                         'ori_path': ori_path,
+                         'nocs2camera': nocs2camera,
+                         'crop_pose': crop_pose,
+                         'pre_fetched': pre_fetched,
+                         'nocs_corners': self.nocs_corner_dict[instance]
+                         }
+                }
 
-        return points, rgb, choose, cat_id, model, prior, sRT, nocs
 
 if __name__ == "__main__":
     dataset_path = '/data1/cxx/Lab_work/dataset'
     result_path = '/data1/cxx/Lab_work/results'
-    obj_category = 1
+    obj_category = '1'
     mode = 'train'
-    dataset = NOCSDataset(dataset_path,
-                          result_path,
-                          obj_category,
-                          mode)
+    num_expr = 'exp_tmp'
+    dataset = NOCSDataset(dataset_path=dataset_path,
+                          result_path=result_path,
+                          obj_category=obj_category,
+                          mode=mode,
+                          num_expr=num_expr)
+    print('end')
+
 

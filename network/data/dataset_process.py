@@ -14,21 +14,21 @@ sys.path.append(os.path.join(base_dir, '..'))
 sys.path.append(os.path.join(base_dir, '..', '..'))
 
 from captra_utils.utils_from_captra import backproject, project, get_corners, bbox_from_corners
-from model.pointnet_utils import farthest_point_sample
+from network.data_utils import farthest_point_sample
 from utils import Timer
 
 nocs_real_cam_intrinsics = np.array([[591.0125, 0, 322.525], [0, 590.16775, 244.11084], [0, 0, 1]])
 
 
 def read_cloud(cloud_dict, num_points, radius_factor, perturb_cfg, device):
-    cam = cloud_dict['points']
+    cam = cloud_dict['points']  # 相机坐标系下的点云 nx3, len(cam)的值为n
     if len(cam) == 0:
         return None, None
-    seg = cloud_dict['labels']
+    seg = cloud_dict['labels']  # mask, nx1
     pose = deepcopy(cloud_dict['pose'])
-    center = pose['translation'].reshape(3)
+    center = pose['translation'].reshape(3)  # 因为NOCS的中心就是(0,0,0),因此其加上位移t,就是对应到相机坐标系下的中心点
     scale = pose['scale']
-    # 添加扰动
+    # 对t和s添加扰动
     if perturb_cfg is not None:
         center += random_translation(perturb_cfg['t'], (1,), perturb_cfg['type']).reshape(3)
         scale += random_vector(perturb_cfg['s'], (1,), perturb_cfg['type'])
@@ -36,6 +36,7 @@ def read_cloud(cloud_dict, num_points, radius_factor, perturb_cfg, device):
                       'scale': float(scale)}
 
     radius = float(scale * radius_factor)
+    # 输入观测点云+位移+半径
     idx = crop_ball_from_pts(cam, center, radius, num_points=num_points, device=device)
 
     return cam[idx], seg[idx], perturbed_pose
@@ -97,21 +98,29 @@ def split_nocs_dataset(root_dset, obj_category, num_expr, mode, bad_ins=[]):
     # 最终生成了real_test.txt文件
 
 
-# 返回球中包含的点的下标
+# 返回最远点采样的结果
 def crop_ball_from_pts(pts, center, radius, num_points=None, device=None):
+    # 计算所有点到中心点的距离
+    # 相当于对冗余点进行了处理 
     distance = np.sqrt(np.sum((pts - center) ** 2, axis=-1))  # [N]
     radius = max(radius, 0.05)  # 最大半径为0.05
-    # 如果球包含的点超过10个就跳出循环
     for i in range(10):
+        # 以中心点为圆心,radius为半径画圆,选出包含的的点
         idx = np.where(distance <= radius)[0]
+        # 如果包含的点数量少于10个,或者没有指定num_points,将半径增大为原来的1.1倍
         if len(idx) >= 10 or num_points is None:
             break
         radius *= 1.10
+
     if num_points is not None:
+        # 当半径中包含的点数量大于10个时
         if len(idx) == 0:
+            # 半径最大也没有包含点，则选择所有点
             idx = np.where(distance <= 1e9)[0]
         if len(idx) == 0:
+            # 包含所有点也没有点，直接返回
             return idx
+        # 点的数量少于采样数量,重复点
         while len(idx) < num_points:
             idx = np.concatenate([idx, idx], axis=0)
         fps_idx = farthest_point_sample(pts[idx], num_points, device)
