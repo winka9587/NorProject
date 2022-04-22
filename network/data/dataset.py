@@ -16,6 +16,8 @@ from utils import ensure_dir
 from captra_utils.utils_from_captra import load_depth
 import _pickle as cPickle
 from dataset_process import split_nocs_dataset, read_cloud, base_generate_data
+from utils import add_border_bool, Timer
+import normalSpeed
 
 
 # 读取实例模型对应的npy文件
@@ -56,16 +58,92 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
         with open(depth_path.replace('depth.png', 'meta.txt'), 'r') as f:
             meta_lines = f.readlines()
         inst_num = -1
+        find_inst = False
         for meta_line in meta_lines:
             inst_num = int(meta_line.split()[0])
             inst_id = meta_line.split()[-1]
             if inst_id == instance:
+                find_inst = True
                 break
+        if not find_inst:
+            print(f'Error when trying find instance in meta.txt, no such instance {instance} in scene {depth_path}')
         mask = cv2.imread(depth_path.replace('depth', 'mask'))[:, :, 2]
         mask = (mask == inst_num)
         full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask}
     else:
-        full_data['pre_fetched'] = {}
+        # 不同于CAPTRA, CAMERA数据集也需要深度图和mask
+        depth_path = cloud_dict['path']
+        depth = cv2.imread(depth_path, -1)
+        with open(depth_path.replace('composed.png', 'meta.txt'), 'r') as f:
+            meta_lines = f.readlines()
+        inst_num = -1
+        find_inst = False
+        for meta_line in meta_lines:
+            inst_num = int(meta_line.split()[0])
+            inst_id = meta_line.split()[-1]
+            if inst_id == instance:
+                find_inst = True
+                break
+        if not find_inst:
+            print(f'Error when trying find instance in meta.txt, no such instance {instance} in scene {depth_path}')
+        mask = cv2.imread(depth_path.replace('depth', 'mask'))[:, :, 2]
+        mask = (mask == inst_num)
+        full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask}
+        # origin CAPTRA code
+        # full_data['pre_fetched'] = {}
+
+    #
+    # crop img by mask
+    mask_add = add_border_bool(mask, kernel_size=10)
+    # mask获取2D bbox,切割rgb图像
+    idx = np.where(mask_add == True)
+    # mask几乎没有点, 数据不可用
+    if len(idx[0]) < 10:
+        print(f"mask point not enough, instance {instance} in scene {depth_path}")
+        return None
+    # x_max = max(idx[1])
+    # x_min = min(idx[1])
+    # y_max = max(idx[0])
+    # y_min = min(idx[0])
+    # print(f'x:[{x_min}:{x_max}], y[{y_min}:{y_max}]')
+    # depth_cropped = depth[y_min:y_max + 1, x_min:x_max + 1]
+    # full_data['pre_fetched']['depth_cropped'] = depth_cropped.astype(np.int16)
+    # full_data['pre_fetched']['crop_x_min'] = x_min
+    # full_data['pre_fetched']['crop_y_min'] = y_min
+
+    # 因为存储不同尺寸的图像会导致batchsize的问题，可以将裁剪留到网络里
+    # 如果必须存储不同尺寸的图像，可以修改dataloader的参数
+    # https://www.jianshu.com/p/da3bf988c246
+    full_data['pre_fetched']['mask_add'] = mask_add
+
+
+    # 计算normalSpeed
+    # 遇到一个问题，就是normalspeed在计算时需要内参，其内部是做了反投影或类似的事情，但因为是封装好的，所以没法修改成处理某一
+    # Real_intrinsics = np.array([[591.0125, 0, 322.525], [0, 590.16775, 244.11084], [0, 0, 1]])
+    # CAMERA_intrinsics = np.array([[577.5, 0, 319.5], [0., 577.5, 239.5], [0., 0., 1.]])
+    fx = 577.5
+    fy = 577.5
+
+    k_size = 5
+    distance_threshold = 2000
+    difference_threshold = 20
+    point_into_surface = False
+
+    # color = np.load("examplePicture/color.npy")
+    depth_nor = depth.astype(np.uint16)
+    """
+    The coordinate of depth and normal is in cv coordinate:
+        - x is horizontal
+        - y is down (to align to the actual pixel coordinates used in digital images)
+        - right-handed: positive z look-at direction
+    """
+    timer = Timer(True)
+    normals_map_out = normalSpeed.depth_normal(depth_nor, fx, fy, k_size, distance_threshold, difference_threshold,
+                                               point_into_surface)
+    timer.tick('depth_normal_end')
+    full_data['pre_fetched']['nrm'] = normals_map_out
+    cv2.imshow(f"normal map of {depth_path}", normals_map_out)
+    cv2.waitKey(0)
 
     # full_data: {
     # 'points': cam_points,
@@ -142,6 +220,7 @@ class NOCSDataset(Dataset):
         return self.len
 
     def __getitem__(self, index):
+        print(f'NOCSDataset get index {index}')
         # ../render/train/1/109d55a137c042f5760315ac3bf2c13e/0000/data/00.npz
         path = self.file_list[index]
         # ../render/train/1/109d55a137c042f5760315ac3bf2c13e/0000/data/00
@@ -177,6 +256,7 @@ class NOCSDataset(Dataset):
                 self.invalid_dict[index] = True
         if index in self.invalid_dict:
             return self.__getitem__((index + 1) % self.len)
+
 
         nocs2camera = full_data.pop('nocs2camera')
         crop_pose = full_data.pop('crop_pose')

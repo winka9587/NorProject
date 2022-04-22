@@ -90,3 +90,7 @@ def get_base_config():
         print(1)
         base_cfg = yaml.load(f, Loader=yaml.FullLoader)
     return base_cfg
+
+
+if __name__ == '__main__':
+    print('base config')

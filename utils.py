@@ -49,6 +49,19 @@ def add_border(mask, inst_id, kernel_size=10):  # enlarge the region w/ 255
     return output
 
 
+def add_border_bool(mask, kernel_size=10):  # enlarge the region w/ 255
+    # print((255 - mask).sum())
+    output = mask.copy()
+    h, w = mask.shape
+    for i in range(h):
+        for j in range(w):
+            if mask[i][j] == True:
+                output[max(0, i - kernel_size): min(h, i + kernel_size),
+                max(0, j - kernel_size): min(w, j + kernel_size)] = True
+    # print((255 - output).sum())
+    return output
+
+
 def config():
     parser = argparse.ArgumentParser()
     parser.add_argument('--root_path', type=str, default=None, help='')
@@ -99,6 +112,7 @@ def ensure_dirs(paths):
             ensure_dir(path)
     else:
         ensure_dir(paths)
+
 
 class Timer:
     def __init__(self, on):

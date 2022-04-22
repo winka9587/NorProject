@@ -24,7 +24,7 @@ if __name__ == "__main__":
     difference_threshold = 20
     point_into_surface = False
 
-    color = np.load("examplePicture/color.npy")
+    # color = np.load("examplePicture/color.npy")
     depth = np.load("examplePicture/depth.npy")
     depth = depth.astype(np.uint16)
 

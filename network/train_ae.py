@@ -1,5 +1,6 @@
+# coding=utf-8
 import os
-device_ids = "2,3"
+device_ids = "1,2"
 os.environ['CUDA_VISIBLE_DEVICES'] = device_ids
 from data.dataset import NOCSDataset
 from torch.utils.data import DataLoader
@@ -20,9 +21,10 @@ def train():
                           num_expr=num_expr,
                           device=device)
     print(f'Successfully Load NOCSDataSet {num_expr}_{mode}_{obj_category}')
-    batch_size = 2
+    batch_size = 10
     total_epoch = 250
-    shuffle = (mode == 'train')
+    shuffle = (mode == 'train')  # æ˜¯å¦æ‰“ä¹±
+    shuffle = False
     num_workers = 0
 
     train_dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
@@ -30,14 +32,16 @@ def train():
     for i, data in enumerate(train_dataloader):
         print(f'data index {i}')
         print(data['path'])
-        if 'real' in mode:
-            # Real
-            replace_str = '_composed'
-        else:
-            replace_str = '_depth'
-        # ÈçºÎ²Ù×÷batch£¿£¿£¿£¿for£¿£¿£¿£¿¿´¿´captraºÍSPDÊÇÔõÃ´×öµÄ
-        depth = cv2.imread()
-        # ¶ÁÈ¡Éî¶ÈÍ¼ºÍmask£¬ mask add_border£¬ ÌáÈ¡normal map £¬ ×Ô±àÂëÆ÷ÑµÁ·
+        # if 'real' in mode:
+        #     # Real
+        #     replace_str = '_composed'
+        # else:
+        #     replace_str = '_depth'
+        # # å¦‚ä½•æ“ä½œbatchï¼Ÿï¼Ÿï¼Ÿï¼Ÿforï¼Ÿï¼Ÿï¼Ÿï¼Ÿçœ‹çœ‹captraå’ŒSPDæ˜¯æ€ä¹ˆåšçš„
+        # # depth = cv2.imread()
+        # è¯»å–æ·±åº¦å›¾å’Œmaskï¼Œ mask add_borderï¼Œ æå–normal map ï¼Œ è‡ªç¼–ç å™¨è®­ç»ƒ
+
+        # åœ¨forwardä¸­ ,é¦–å…ˆç”¨mask add_border,ç„¶åè£å‰ªdepthï¼Œè¾“å…¥normalspeed
 
 
 if __name__ == "__main__":
