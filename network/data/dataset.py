@@ -142,6 +142,7 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
                                                point_into_surface)
     timer.tick('depth_normal_end')
     full_data['pre_fetched']['nrm'] = normals_map_out
+    # try viz nrm
     cv2.imshow(f"normal map of {depth_path}", normals_map_out)
     cv2.waitKey(0)
 
