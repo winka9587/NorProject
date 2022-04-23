@@ -2,7 +2,7 @@
 import os
 device_ids = "2"
 os.environ['CUDA_VISIBLE_DEVICES'] = device_ids
-from data.dataset import NOCSDataset
+from data.dataset import NOCSDataset, SequenceDataset
 from torch.utils.data import DataLoader
 import torch
 import cv2
@@ -16,17 +16,16 @@ def train():
     dataset_path = '/data1/cxx/Lab_work/dataset'
     result_path = '/data1/cxx/Lab_work/results'
     obj_category = '1'
-    mode = 'train'
+    mode = 'real_train'
     num_expr = 'exp_tmp'
     device = torch.device("cuda:0")
-    dataset = NOCSDataset(dataset_path=dataset_path,
+    dataset = SequenceDataset(dataset_path=dataset_path,
                           result_path=result_path,
                           obj_category=obj_category,
                           mode=mode,
                           num_expr=num_expr,
                           device=device)
     print(f'Successfully Load NOCSDataSet {num_expr}_{mode}_{obj_category}')
-
 
 
     batch_size = 10
@@ -43,11 +42,12 @@ def train():
     # estimator = torch.nn.DataParallel(estimator, device_ids)
     estimator.cuda()
     if resume_model != '':
-        estimator.load_state_dict(torch.load(opt.resume_model))
+        estimator.load_state_dict(torch.load(resume_model))
 
     for i, data in enumerate(train_dataloader):
         print(f'data index {i}')
-        print(data['path'])
+        print('data:{}'.format(data['meta']['path']))
+        # print(data['path'])
         # if 'real' in mode:
         #     # Real
         #     replace_str = '_composed'

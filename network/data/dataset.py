@@ -15,9 +15,11 @@ import cv2
 from utils import ensure_dir
 from captra_utils.utils_from_captra import load_depth
 import _pickle as cPickle
-from dataset_process import split_nocs_dataset, read_cloud, base_generate_data
+from dataset_process import split_nocs_dataset, read_cloud, base_generate_data, shuffle, subtract_mean, add_corners
 from utils import add_border_bool, Timer
 import normalSpeed
+import random
+from copy import deepcopy
 
 
 # 读取实例模型对应的npy文件
@@ -143,8 +145,8 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
     timer.tick('depth_normal_end')
     full_data['pre_fetched']['nrm'] = normals_map_out
     # try viz nrm
-    cv2.imshow(f"normal map of {depth_path}", normals_map_out)
-    cv2.waitKey(0)
+    # cv2.imshow(f"normal map of {depth_path}", normals_map_out)
+    # cv2.waitKey(0)
 
     # full_data: {
     # 'points': cam_points,
@@ -170,13 +172,13 @@ def read_nocs_pose(root_dset, mode, obj_category, instance, track_num, frame_i):
 # result_path:
 #       --img_list
 # obj_category: [1, 2, 3, 4, 5, 6]
-# mode: [train, test]
+# mode: [train, val, real_train, real_val]
 # source: [Real, CAMERA, Real_CAMERA]
 class NOCSDataset(Dataset):
     def __init__(self, dataset_path, result_path, obj_category, mode, num_expr, num_points=4096, radius=0.6,
                  bad_ins=[], perturb_cfg=None, device=None, opt=None):
         print('Initializing NOCSDataset ...')
-        assert (mode == 'train' or mode == 'val'), 'Mode must be "train" or "val".'
+        # assert (mode == 'train' or mode == 'val'), 'Mode must be "train" or "val".'
         self.dataset_path = dataset_path
         self.result_path = result_path
         self.obj_category = obj_category
@@ -272,6 +274,73 @@ class NOCSDataset(Dataset):
                          'nocs_corners': self.nocs_corner_dict[instance]    # (1, 2, 3) bbox？角点
                          }
                 }
+
+
+# 返回file_list中不同路径的数量，存放在start_points中（为什么要用个list？直接用个数不行吗）
+# 因為file_list中有多個scene的路徑，最終返回的数组其实是每个scene数据的起点
+def get_seq_file_list_index(file_list):
+    track_dict = {}
+    start_points = []
+    for i, file_name in enumerate(file_list):
+        # 这一步唯一的作用是将最后的文件名删除了 ../xxx/xxx/0001.npz 变为 ../xxx/xxx
+        track_name = '/'.join(file_name.split('/')[:-1])
+        # 创建了一个字典，key是../xxx/xxx，value是文件在文件夹中sort后的序号
+        # 字典中的key是npz文件的路径，i是对应的index从0开始，最后将所有的index以start_points
+        if track_name not in track_dict:
+            track_dict[track_name] = i
+            start_points.append(i)
+    print(track_dict)
+    start_points.append(len(file_list))
+    return start_points
+
+
+class SequenceDataset(Dataset):
+    # 加载数据集在PointData里面做了
+    def __init__(self, dataset_path, result_path, obj_category, mode, num_expr, num_points=4096, radius=0.6,
+                 bad_ins=[], perturb_cfg=None, device=None, opt=None):
+        self.dataset = NOCSDataset(dataset_path, result_path, obj_category, mode, num_expr,
+                                              num_points=num_points, radius=radius, bad_ins=bad_ins,
+                                              perturb_cfg=perturb_cfg, device=device, opt=opt)
+        self.seq_start = get_seq_file_list_index(self.dataset.file_list)
+        print('seq start', self.seq_start)
+        self.len = len(self.seq_start) - 1
+
+    def __len__(self):
+        return self.len
+
+    def retrieve_single_frame(self, item):
+        data = self.dataset[item]
+        data_dict = data['data']
+        meta_dict = data['meta']
+
+        def reshape(x):  # from [N, x, x] to [C, N]
+            x = x.reshape(x.shape[0], -1)
+            x = x.swapaxes(0, 1)
+            return x
+
+        for key in data_dict.keys():
+            if key in ['labels']:
+                continue
+            data_dict[key] = reshape(data_dict[key])
+        data_dict['meta'] = meta_dict
+
+        item_idx = data['meta']['path'].split('.')[-2].split('/')[-3]
+        if 'nocs_corners' not in data_dict['meta'] and not self.real_data:
+            data_dict = add_corners(data_dict, self.ins_info[item_idx])
+
+        return data_dict
+
+    def __getitem__(self, idx):
+        seq_data = []
+        for i in range(self.seq_start[idx], self.seq_start[idx + 1]):
+            data = deepcopy(self.retrieve_single_frame(i))
+            data = shuffle(data)
+            seq_data.append(data)
+        ret = []
+        for data in seq_data:
+            data = subtract_mean(data)
+            ret.append(data)
+        return ret
 
 
 if __name__ == "__main__":
