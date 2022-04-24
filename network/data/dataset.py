@@ -294,7 +294,7 @@ def get_seq_file_list_index(file_list):
     return start_points
 
 
-class SequenceDataset(Dataset):
+class EvalDataset(Dataset):
     # 加载数据集在PointData里面做了
     def __init__(self, dataset_path, result_path, obj_category, mode, num_expr, num_points=4096, radius=0.6,
                  bad_ins=[], perturb_cfg=None, device=None, opt=None):
@@ -338,10 +338,80 @@ class SequenceDataset(Dataset):
             seq_data.append(data)
         ret = []
         for data in seq_data:
+            # 将一整个序列的点云归一化, 减去平均点
+            # 修改了data['points']
+            # 增加了data['meta']['points_mean']
+            # 可能对旋转是有必要的？
             data = subtract_mean(data)
             ret.append(data)
         return ret
 
+
+class RealSeqDataset(Dataset):
+    # 将seq_data按照预设的序列长度切分
+    # 例如序列长度为100,每个子序列长度为5
+    # 切分成
+    # [0:5], [1:6], ..., [95,100]
+    def __init__(self, dataset_path, result_path, obj_category, mode, num_expr, subseq_len=2, num_points=4096, radius=0.6,
+                 bad_ins=[], perturb_cfg=None, device=None, opt=None):
+        print('Initializing RealSeqDataset')
+        self.dataset = NOCSDataset(dataset_path, result_path, obj_category, mode, num_expr,
+                                              num_points=num_points, radius=radius, bad_ins=bad_ins,
+                                              perturb_cfg=perturb_cfg, device=device, opt=opt)
+        self.seq_start = get_seq_file_list_index(self.dataset.file_list)
+        print('seq start', self.seq_start)
+        self.subseq_len = subseq_len
+        self.len = 0
+        self.idx_ref = np.array([])
+        seq_start_idx_len = len(self.seq_start) - 1  # seq_start序列的长度
+        for i in range(0, seq_start_idx_len-1):
+            # 某一个scene的序列长度
+            seq_len = self.seq_start[i+1]-self.seq_start[i]
+            assert subseq_len < seq_len
+            idx_ref_tmp = np.arange(0, seq_len-subseq_len+1) + self.seq_start[i]
+            self.idx_ref = np.concatenate([self.idx_ref, idx_ref_tmp], axis=0).astype(np.int16)
+        self.len = self.idx_ref.shape[0]
+
+    def __len__(self):
+        return self.len
+
+    def retrieve_single_frame(self, item):
+        data = self.dataset[item]
+        data_dict = data['data']
+        meta_dict = data['meta']
+
+        def reshape(x):  # from [N, x, x] to [C, N]
+            x = x.reshape(x.shape[0], -1)
+            x = x.swapaxes(0, 1)
+            return x
+
+        for key in data_dict.keys():
+            if key in ['labels']:
+                continue
+            data_dict[key] = reshape(data_dict[key])
+        data_dict['meta'] = meta_dict
+
+        item_idx = data['meta']['path'].split('.')[-2].split('/')[-3]
+        if 'nocs_corners' not in data_dict['meta'] and not self.real_data:
+            data_dict = add_corners(data_dict, self.ins_info[item_idx])
+
+        return data_dict
+
+    def __getitem__(self, idx):
+        subseq_data = []
+        for i in range(self.subseq_len):
+            data = deepcopy(self.retrieve_single_frame(self.idx_ref[idx+i]))
+            data = shuffle(data)
+            subseq_data.append(data)
+        ret = []
+        for data in subseq_data:
+            # 将一整个序列的点云归一化, 减去平均点
+            # 修改了data['points']
+            # 增加了data['meta']['points_mean']
+            # 可能对旋转是有必要的？
+            data = subtract_mean(data)
+            ret.append(data)
+        return ret
 
 if __name__ == "__main__":
     dataset_path = '/data1/cxx/Lab_work/dataset'

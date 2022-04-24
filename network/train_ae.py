@@ -2,7 +2,7 @@
 import os
 device_ids = "2"
 os.environ['CUDA_VISIBLE_DEVICES'] = device_ids
-from data.dataset import NOCSDataset, SequenceDataset
+from data.dataset import NOCSDataset, RealSeqDataset
 from torch.utils.data import DataLoader
 import torch
 import cv2
@@ -18,11 +18,13 @@ def train():
     obj_category = '1'
     mode = 'real_train'
     num_expr = 'exp_tmp'
+    subseq_len = 2
     device = torch.device("cuda:0")
-    dataset = SequenceDataset(dataset_path=dataset_path,
+    dataset = RealSeqDataset(dataset_path=dataset_path,
                           result_path=result_path,
                           obj_category=obj_category,
                           mode=mode,
+                          subseq_len=subseq_len,
                           num_expr=num_expr,
                           device=device)
     print(f'Successfully Load NOCSDataSet {num_expr}_{mode}_{obj_category}')
