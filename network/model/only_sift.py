@@ -32,7 +32,7 @@ class SIFT_Track(nn.Module):
                 item = item.float().to(self.device)
             feed_frame[key] = item
         gt_part = part_model_batch_to_part(cvt_torch(frame['meta']['nocs2camera'], self.device), self.num_parts,
-                                           self.cfg['device'])
+                                           self.device)
         feed_frame.update({'gt_part': gt_part})
 
         return feed_frame
@@ -40,7 +40,7 @@ class SIFT_Track(nn.Module):
 
     def convert_subseq_frame_data(self, data):
         gt_part = part_model_batch_to_part(cvt_torch(data['meta']['nocs2camera'], self.device), self.num_parts,
-                                           self.cfg['device'])
+                                           self.device)
         input = {'points': data['points'],
                  'points_mean': data['meta']['points_mean'],
                  'gt_part': gt_part}

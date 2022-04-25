@@ -24,6 +24,11 @@ def list_to_tree(tree):
     return root, children, joint_idx
 
 
+# part {
+# 'rotation': [B, P, 3, 3]
+# 'scale':[B, P]
+# 'translation':[B, P, 3, 1]
+# }
 def convert_part_model(part):
     if isinstance(part['scale'], dict):
         num_parts = len(part['scale'])
@@ -67,10 +72,15 @@ def eval_part_full(gt, pred, per_instance=False, yaxis_only=False):
     return pdiff, per_diff
 
 
+# cvt_torch(frame['meta']['nocs2camera'], self.device), {rotation, scale, translation}
+# num_parts = self.num_parts, for nocs, alway 1
+# device = self.device
+# 这个函数本意是为了处理一个物体中不同部件
+# 将P个 part[p]中的translation[B,3,1] 组合成 {translation [B,P,3,1]}
 def part_model_batch_to_part(part, num_parts, device):  # [{'scale': [B], 'translation': [B, 3, 1], 'rotation': [B, 3, 3]} * P]
-    keys = list(part[0].keys())
-    dim = len(part[0]['translation'].shape) - 2
-    part_model = {key: torch.stack([torch.tensor(part[p][key]) for p in range(num_parts)], dim=dim).float().to(device)
+    keys = list(part[0].keys())  # ['rotation', 'scale', 'translation']
+    dim = len(part[0]['translation'].shape) - 2  # .shape的维度, [B,3,1]  dim = len(.shape)-2 = 1
+    part_model = {key: torch.stack([torch.tensor(part[0][key]).clone()], dim=dim).float().to(device)
                   for key in keys}
     return convert_part_model(part_model)
 
