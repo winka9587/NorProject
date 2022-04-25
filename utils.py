@@ -4,7 +4,7 @@ import logging  # 引入logging模块
 import os.path
 import time
 import argparse
-
+import torch
 # 该行是windows下拼接路径,linux也可以用(应该？)
 def pjoin(*a):
     path = a[0]
@@ -128,3 +128,16 @@ class Timer:
         if str is not None:
             print(str, diff)
         return diff
+
+
+def cvt_torch(x, device):
+    if isinstance(x, np.ndarray):
+        return torch.tensor(x).float().to(device)
+    elif isinstance(x, torch.Tensor):
+        return x.float().to(device)
+    elif isinstance(x, dict):
+        return {key: cvt_torch(value, device) for key, value in x.items()}
+    elif isinstance(x, list):
+        return [cvt_torch(item, device) for item in x]
+    elif x is None:
+        return None

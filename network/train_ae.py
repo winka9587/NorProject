@@ -1,16 +1,16 @@
 # coding=utf-8
 import os
-device_ids = "2"
+device_ids = "3"
 os.environ['CUDA_VISIBLE_DEVICES'] = device_ids
 from data.dataset import NOCSDataset, RealSeqDataset
 from torch.utils.data import DataLoader
+
 import torch
 import cv2
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 print(os.path.dirname(os.path.abspath(__file__)))
-
-from auto_encoder import PointCloudAE
+from only_sift import SIFT_Track
 
 def train():
     dataset_path = '/data1/cxx/Lab_work/dataset'
@@ -40,7 +40,7 @@ def train():
     emb_dim = 512
     num_points = 1024
     resume_model = ''
-    estimator = PointCloudAE(emb_dim, num_points)
+    estimator = SIFT_Track(device=device)
     # estimator = torch.nn.DataParallel(estimator, device_ids)
     estimator.cuda()
     if resume_model != '':
@@ -48,7 +48,7 @@ def train():
 
     for i, data in enumerate(train_dataloader):
         print(f'data index {i}')
-        print('data:{}'.format(data['meta']['path']))
+        estimator.set_data(data)
         # print(data['path'])
         # if 'real' in mode:
         #     # Real
