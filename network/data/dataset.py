@@ -69,9 +69,11 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
                 break
         if not find_inst:
             print(f'Error when trying find instance in meta.txt, no such instance {instance} in scene {depth_path}')
+        color = cv2.imread(depth_path.replace('depth', 'color'))
         mask = cv2.imread(depth_path.replace('depth', 'mask'))[:, :, 2]
         mask = (mask == inst_num)
-        full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask}
+        full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask, 'color':color}
+        # color
     else:
         # 不同于CAPTRA, CAMERA数据集也需要深度图和mask
         depth_path = cloud_dict['path']
@@ -88,9 +90,10 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
                 break
         if not find_inst:
             print(f'Error when trying find instance in meta.txt, no such instance {instance} in scene {depth_path}')
+        color = cv2.imread(depth_path.replace('depth', 'color'))
         mask = cv2.imread(depth_path.replace('depth', 'mask'))[:, :, 2]
         mask = (mask == inst_num)
-        full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask}
+        full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask, 'color':color}
         # origin CAPTRA code
         # full_data['pre_fetched'] = {}
 

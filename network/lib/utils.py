@@ -825,3 +825,24 @@ def draw_detections(img, out_dir, data_name, img_id, intrinsics, pred_sRT, pred_
     cv2.imwrite(out_path, img)
     # cv2.imshow('vis', img)
     # cv2.waitKey(0)
+
+
+ # load depth img of two frame
+def load_multi_imgs(paths, replace_name=None):
+    imgs = []
+    for path in paths:
+        if replace_name=='color':
+            img = cv2.imread(path.replace('depth', replace_name))
+        elif replace_name=='mask':
+            img = cv2.imread(path.replace('depth', replace_name))[:, :, 2]
+        else:
+            # 默认读取depth
+            img = cv2.imread(path, -1)
+        imgs.append(img)
+    return imgs
+
+
+def crop_img(img, crop_pos_dict):
+    img_res = img[crop_pos_dict['y_min']:crop_pos_dict['y_max'], crop_pos_dict['x_min']:crop_pos_dict['x_max']]
+    return img_res
+

@@ -77,11 +77,13 @@ def eval_part_full(gt, pred, per_instance=False, yaxis_only=False):
 # device = self.device
 # 这个函数本意是为了处理一个物体中不同部件
 # 将P个 part[p]中的translation[B,3,1] 组合成 {translation [B,P,3,1]}
-def part_model_batch_to_part(part, num_parts, device):  # [{'scale': [B], 'translation': [B, 3, 1], 'rotation': [B, 3, 3]} * P]
+def part_model_batch_to_part(part, num_parts, device):
+    # part[0]:      [{'scale': [B], 'translation': [B, 3, 1], 'rotation': [B, 3, 3]} * P]
     keys = list(part[0].keys())  # ['rotation', 'scale', 'translation']
     dim = len(part[0]['translation'].shape) - 2  # .shape的维度, [B,3,1]  dim = len(.shape)-2 = 1
-    part_model = {key: torch.stack([torch.tensor(part[0][key]).clone()], dim=dim).float().to(device)
+    part_model = {key: torch.stack([part[0][key].clone()], dim=dim).float().to(device)
                   for key in keys}
+    # convert_part_model这个函数会被跳过
     return convert_part_model(part_model)
 
 
