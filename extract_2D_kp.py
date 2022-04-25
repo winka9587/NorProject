@@ -1,7 +1,10 @@
 import cv2
+import torch
 
 
 def extract_sift_kp_from_RGB(img_color_cropped, opt=None):
+    if isinstance(img_color_cropped, torch.Tensor):
+        img_color_cropped = img_color_cropped.clone().detach().cpu().numpy()
     img_gray = cv2.cvtColor(img_color_cropped, cv2.COLOR_BGR2GRAY)
     sift = cv2.SIFT_create()
     kp_xys, des = sift.detectAndCompute(img_gray, None)

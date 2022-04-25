@@ -7,6 +7,7 @@ from utils import cvt_torch, Timer
 from network.lib.utils import crop_img
 import numpy as np
 from extract_2D_kp import extract_sift_kp_from_RGB, sift_match
+import cv2
 
 class SIFT_Track(nn.Module):
     def __init__(self, device, subseq_len=2):
@@ -18,6 +19,7 @@ class SIFT_Track(nn.Module):
         self.device = device
         self.num_parts = 1
         self.num_joints = 0
+        self.matcher = cv2.BFMatcher(cv2.NORM_L2)
 
     # frame={dict:4}
     # points, labels, nocs, meta
@@ -119,16 +121,24 @@ class SIFT_Track(nn.Module):
             next_pre_fetched = next_frame['meta']['pre_fetched']
             next_colors = next_pre_fetched['color']
             # sift匹配
-            bf = cv2.BFMatcher(cv2.NORM_L2)
-            for j in batch_size:
+            for j in range(batch_size):
                 last_crop_color = crop_img(last_colors[j], crop_pos[j])
                 next_crop_color = crop_img(next_colors[j], crop_pos[j])
                 timer = Timer(True)
                 color_sift_1, kp_xys_1, des_1 = extract_sift_kp_from_RGB(last_crop_color)
                 color_sift_2, kp_xys_2, des_2 = extract_sift_kp_from_RGB(next_crop_color)
-                Timer.tick('sift feature extract')
-                matches = sift_match(des_1,des_2)
-                Timer.tick('sift match ')
+                timer.tick('sift feature extract')
+                matches = sift_match(des_1, des_2, self.matcher)
+                timer.tick('sift match ')
+                # 可以用RANSAC过滤特征点
+                # https://blog.csdn.net/sinat_41686583/article/details/115186277
+
+                # cv2.imshow('color_sift_1', color_sift_1)
+                # cv2.waitKey(0)
+                # cv2.imshow('color_sift_2', color_sift_2)
+                # cv2.waitKey(0)
+                # 提取3D点并进行匹配
+
             last_frame = next_frame
             last_colors = next_colors
         # bs = embedding.size()[0]
