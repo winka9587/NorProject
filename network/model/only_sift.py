@@ -8,6 +8,8 @@ from network.lib.utils import crop_img
 import numpy as np
 from extract_2D_kp import extract_sift_kp_from_RGB, sift_match
 import cv2
+from normalspeedTest import norm2bgr
+
 
 class SIFT_Track(nn.Module):
     def __init__(self, device, subseq_len=2):
@@ -102,8 +104,12 @@ class SIFT_Track(nn.Module):
         init_pre_fetched = init_frame['meta']['pre_fetched']
         init_masks = init_pre_fetched['mask_add']
         init_colors = init_pre_fetched['color']
+        init_nrms = init_pre_fetched['nrm']
         batch_size = len(init_masks)
         crop_pos = []
+        # 可以对比的点:
+        # last_frame 用mask
+        # next_frame 用mask_add
         for i in range(batch_size):
             idx = torch.where(init_masks[i, :, :])
             x_max = max(idx[1])
@@ -114,12 +120,12 @@ class SIFT_Track(nn.Module):
             crop_pos.append(crop_pos_tmp)
         # sift
         for i in range(1, len(self.feed_dict)):
-            if i == 1:
-                last_frame = init_frame
-                last_colors = init_colors
+            last_frame = self.feed_dict[i-1]
             next_frame = self.feed_dict[1]
-            next_pre_fetched = next_frame['meta']['pre_fetched']
-            next_colors = next_pre_fetched['color']
+            last_colors = last_frame['meta']['pre_fetched']['color']
+            last_nrms = last_frame['meta']['pre_fetched']['nrm']
+            next_colors = next_frame['meta']['pre_fetched']['color']
+            next_nrms = next_frame['meta']['pre_fetched']['nrm']
             # sift匹配
             for j in range(batch_size):
                 last_crop_color = crop_img(last_colors[j], crop_pos[j])
@@ -133,14 +139,22 @@ class SIFT_Track(nn.Module):
                 # 可以用RANSAC过滤特征点
                 # https://blog.csdn.net/sinat_41686583/article/details/115186277
 
-                # cv2.imshow('color_sift_1', color_sift_1)
-                # cv2.waitKey(0)
-                # cv2.imshow('color_sift_2', color_sift_2)
-                # cv2.waitKey(0)
+                # 取对应的normal map
+                last_crop_nrm = crop_img(last_nrms[j], crop_pos[j])
+                next_crop_nrm = crop_img(next_nrms[j], crop_pos[j])
+
+                cv2.imshow('color_sift_1', color_sift_1)
+                cv2.waitKey(0)
+                cv2.imshow('color_sift_2', color_sift_2)
+                cv2.waitKey(0)
+
+                cv2.imshow('nrm_1', norm2bgr(last_crop_nrm))
+                cv2.waitKey(0)
+                cv2.imshow('nrm_2', norm2bgr(next_crop_nrm))
+                cv2.waitKey(0)
                 # 提取3D点并进行匹配
 
-            last_frame = next_frame
-            last_colors = next_colors
+
         # bs = embedding.size()[0]
         # out = F.relu(self.fc1(embedding))
         # out = F.relu(self.fc2(out))

@@ -2,10 +2,13 @@
 import numpy as np
 import time
 import cv2
+import torch
 import normalSpeed
 
 
 def norm2bgr(norm):
+    if isinstance(norm, torch.Tensor):
+        norm = norm.clone().detach().cpu().numpy()
     norm = ((norm + 1.0) * 127).astype("uint8")
     return norm
 
