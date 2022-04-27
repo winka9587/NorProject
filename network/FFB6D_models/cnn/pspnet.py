@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch.nn import functional as F
-import models.cnn.extractors as extractors
+import extractors as extractors
 
 
 class PSPModule(nn.Module):

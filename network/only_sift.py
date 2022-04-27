@@ -9,10 +9,39 @@ import numpy as np
 from extract_2D_kp import extract_sift_kp_from_RGB, sift_match
 import cv2
 from normalspeedTest import norm2bgr
+# network.FFB6D_models.
+# from network.FFB6D_models.cnn.pspnet import PSPNet
+import network.FFB6D_models.pytorch_utils as pt_utils
+# from network.FFB6D_models.RandLA.RandLANet import Network as RandLANet
+from captra_utils.utils_from_captra import backproject
+
+class ConfigRandLA:
+    k_n = 16  # KNN
+    num_layers = 4  # Number of layers
+    num_points = 480 * 640 // 24  # Number of input points
+    num_classes = 22  # Number of valid classes
+    sub_grid_size = 0.06  # preprocess_parameter
+
+    batch_size = 3  # batch_size during training
+    val_batch_size = 3  # batch_size during validation and test
+    train_steps = 500  # Number of steps per epochs
+    val_steps = 100  # Number of validation steps per epoch
+    in_c = 9
+
+    sub_sampling_ratio = [4, 4, 4, 4]  # sampling ratio of random sampling at each layer
+    d_out = [32, 64, 128, 256]  # feature dimension
+    num_sub_points = [num_points // 4, num_points // 16, num_points // 64, num_points // 256]
+
+
+# psp_models = {
+#     'resnet18': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=512, deep_features_size=256, backend='resnet18'),
+#     'resnet34': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=512, deep_features_size=256, backend='resnet34'),
+#     'resnet50': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, backend='resnet50'),
+# }
 
 
 class SIFT_Track(nn.Module):
-    def __init__(self, device, subseq_len=2):
+    def __init__(self, device, real, subseq_len=2):
         super(SIFT_Track, self).__init__()
         # self.fc1 = nn.Linear(emb_dim, 512)
         # self.fc2 = nn.Linear(512, 1024)
@@ -23,7 +52,35 @@ class SIFT_Track(nn.Module):
         self.num_joints = 0
         self.matcher = cv2.BFMatcher(cv2.NORM_L2)
 
+        if real:
+            self.intrinsics = np.array([[591.0125, 0, 322.525], [0, 590.16775, 244.11084], [0, 0, 1]])
+        else:
+            self.intrinsics = np.array([[577.5, 0, 319.5], [0., 577.5, 239.5], [0., 0., 1.]])
+
         # FFB6D
+        # cnn = psp_models['resnet34'.lower()]()
+        # self.cnn_pre_stages = nn.Sequential(
+        #     cnn.feats.conv1,  # stride = 2, [bs, c, 240, 320]
+        #     cnn.feats.bn1, cnn.feats.relu,
+        #     cnn.feats.maxpool  # stride = 2, [bs, 64, 120, 160]
+        # )
+        # rndla_cfg = ConfigRandLA
+        # rndla = RandLANet(rndla_cfg)
+        # self.rndla_pre_stages = rndla.fc0
+        self.rndla_pre_stages = pt_utils.Conv1d(9, 8, kernel_size=1, bn=True)
+
+        # ####################### downsample stages#######################
+        # self.cnn_ds_stages = nn.ModuleList([
+        #     cnn.feats.layer1,  # stride = 1, [bs, 64, 120, 160]
+        #     cnn.feats.layer2,  # stride = 2, [bs, 128, 60, 80]
+        #     # stride = 1, [bs, 128, 60, 80]
+        #     nn.Sequential(cnn.feats.layer3, cnn.feats.layer4),
+        #     nn.Sequential(cnn.psp, cnn.drop_1)  # [bs, 1024, 60, 80]
+        # ])
+        # self.ds_sr = [4, 8, 8, 8]
+
+
+
 
     # frame={dict:4}
     # points, labels, nocs, meta
@@ -96,6 +153,74 @@ class SIFT_Track(nn.Module):
         return input
 
 
+    # 有mask_add_from_last_frame说明是第二帧，需要使用前一帧提供的mask
+    def extract_3D_kp(self, frame, mask):
+        # rgb                彩色图像               [bs, 3, h, w]
+        # dpt_nrm            图像:xyz+normal       [bs, 6, h, w], 3c xyz in meter + 3c normal map
+        # cld_rgb_nrm点云:    xyz+rgb+normal      [bs, 9, npts]
+        # choose             应该是mask            [bs, 1, npts]
+
+        # 输入color,normal,depth,mask,反投影，得到9通道的点云
+        color = frame['meta']['pre_fetched']['color']
+        depth = frame['meta']['pre_fetched']['depth']
+        nrm = frame['meta']['pre_fetched']['nrm']
+
+        for batch_idx in range(len(depth)):
+            points, idxs = backproject(depth[batch_idx], self.intrinsics, mask=mask[batch_idx])
+            points_rgb = color[batch_idx][idxs[0], idxs[1]].astype(np.float32)
+            points_nrm = nrm[batch_idx][idxs[0], idxs[1]].astype(np.float32)
+            for i in idx
+
+        # mask点的数量是不一样的
+
+        # rgb
+        # 计算batch
+        rgb_emb = self.cnn_pre_stages(inputs['rgb'])  # stride = 2, [bs, c, 240, 320]
+        xyz, p_emb = self._break_up_pc(inputs['cld_rgb_nrm'])  # xyz
+        p_emb = inputs['cld_rgb_nrm']
+        p_emb = self.rndla_pre_stages(p_emb)  # channel 9 -> 8
+        p_emb = p_emb.unsqueeze(dim=3)  # Batch*channel*npoints*1
+        ds_emb = []
+        # 4个downsampled
+        for i_ds in range(4):
+            # encode rgb downsampled feature
+            rgb_emb0 = self.cnn_ds_stages[i_ds](rgb_emb)
+            bs, c, hr, wr = rgb_emb0.size()
+
+            # encode point cloud downsampled feature
+            f_encoder_i = self.rndla_ds_stages[i_ds](
+                p_emb, inputs['cld_xyz%d' % i_ds], inputs['cld_nei_idx%d' % i_ds]
+            )
+            f_sampled_i = self.random_sample(f_encoder_i, inputs['cld_sub_idx%d' % i_ds])
+            p_emb0 = f_sampled_i
+            if i_ds == 0:
+                ds_emb.append(f_encoder_i)
+
+            # fuse point feauture to rgb feature
+            p2r_emb = self.ds_fuse_p2r_pre_layers[i_ds](p_emb0)
+            p2r_emb = self.nearest_interpolation(
+                p2r_emb, inputs['p2r_ds_nei_idx%d' % i_ds]
+            )
+            p2r_emb = p2r_emb.view(bs, -1, hr, wr)
+            rgb_emb = self.ds_fuse_p2r_fuse_layers[i_ds](
+                torch.cat((rgb_emb0, p2r_emb), dim=1)
+            )
+
+            # fuse rgb feature to point feature
+            r2p_emb = self.random_sample(
+                rgb_emb0.reshape(bs, c, hr * wr, 1), inputs['r2p_ds_nei_idx%d' % i_ds]
+            ).view(bs, c, -1, 1)
+            r2p_emb = self.ds_fuse_r2p_pre_layers[i_ds](r2p_emb)
+            p_emb = self.ds_fuse_r2p_fuse_layers[i_ds](
+                torch.cat((p_emb0, r2p_emb), dim=1)
+            )
+            ds_emb.append(p_emb)
+
+
+        # 还需要做分割mask_for_next
+        #
+        return 3d_kps, mask_for_next
+
     def forward(self):
         # 传入的data分为两部分, 第一帧和后续帧
         # 1.初始帧
@@ -120,7 +245,8 @@ class SIFT_Track(nn.Module):
             y_min = min(idx[0])
             crop_pos_tmp = {'x_min': x_min, 'x_max': x_max, 'y_min': y_min, 'y_max': y_max}
             crop_pos.append(crop_pos_tmp)
-        if False:
+        use_ = False
+        if use_:
             # sift
             for i in range(1, len(self.feed_dict)):
                 last_frame = self.feed_dict[i - 1]
@@ -159,6 +285,7 @@ class SIFT_Track(nn.Module):
                     # 提取3D点并进行匹配
                     # 提取xyz+RGB+normal特征进行匹配
 
+        mask_last_frame = self.feed_dict[0]['meta']['pre_fetched']['mask']
         # try FFB6D extract 3D kp
         for i in range(1, len(self.feed_dict)):
             last_frame = self.feed_dict[i - 1]
@@ -167,10 +294,13 @@ class SIFT_Track(nn.Module):
             last_nrms = last_frame['meta']['pre_fetched']['nrm']
             next_colors = next_frame['meta']['pre_fetched']['color']
             next_nrms = next_frame['meta']['pre_fetched']['nrm']
-            # 两帧都走一趟FFB6Dforward中的extract kp流程
-
-
-
+            # 提取两帧的3D关键点
+            mask_add = self.extract_3D_kp(last_frame, mask_last_frame)
+            self.extract_3D_kp(next_frame, mask_add)
+            if i != len(self.feed_dict):
+                # 还有后续帧
+                # 将第一帧mask后的点云通过RT变换到第二帧,来为之后的帧提供mask
+                mask_last_frame = get_mask()
 
 
 

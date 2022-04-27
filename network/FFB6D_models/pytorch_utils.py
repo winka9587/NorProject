@@ -13,7 +13,6 @@ from itertools import repeat
 import numpy as np
 import shutil
 import tqdm
-from scipy.stats import t as student_t
 import statistics as stats
 
 

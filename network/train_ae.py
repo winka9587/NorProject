@@ -2,15 +2,14 @@
 import os
 device_ids = "3"
 os.environ['CUDA_VISIBLE_DEVICES'] = device_ids
-from data.dataset import NOCSDataset, RealSeqDataset
+from data.dataset import RealSeqDataset
 from torch.utils.data import DataLoader
 
 import torch
-import cv2
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 print(os.path.dirname(os.path.abspath(__file__)))
-from only_sift import SIFT_Track
+from network.only_sift import SIFT_Track
 
 def train():
     dataset_path = '/data1/cxx/Lab_work/dataset'
@@ -40,7 +39,7 @@ def train():
     emb_dim = 512
     num_points = 1024
     resume_model = ''
-    estimator = SIFT_Track(device=device)
+    estimator = SIFT_Track(device=device, real=('real' in mode))
     # estimator = torch.nn.DataParallel(estimator, device_ids)
     estimator.cuda()
     if resume_model != '':

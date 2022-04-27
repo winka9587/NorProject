@@ -15,7 +15,8 @@ def pjoin(*a):
             path = os.path.join(path, a[i]).replace('\\', '/')
     return path
 
-
+# mine
+# 将离散的2D点反投影到3D空间中
 # points_xy:nx2 (x,y) 传入的点是cv提取的2D点,坐标系原点在图像左上角
 def backproject_points(points_xy, depth, intrinsics, scale=0.001):
     points_uv1 = np.ones((points_xy.shape[0], 3), np.float64)
@@ -32,7 +33,7 @@ def backproject_points(points_xy, depth, intrinsics, scale=0.001):
         point_depth = depth[kp_y, kp_x].astype(np.float32)
         points_xyz[i, :] = points_xyz[i, :] * point_depth / points_xyz[i, -1:]
     points_xyz[:, 2] = -points_xyz[:, 2]
-    zero_idx = np.where(points_xyz[:, 2] == 0)
+    zero_idx = np.where(points_xyz[:, 2] == 0)  # only for debug
     return points_xyz*scale, zero_idx
 
 

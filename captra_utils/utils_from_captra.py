@@ -831,6 +831,10 @@ def draw_detections(img, out_dir, data_name, img_id, intrinsics, pred_sRT, pred_
 
 def backproject(depth, intrinsics=np.array([[577.5, 0, 319.5], [0., 577.5, 239.5], [0., 0., 1.]]),
                 mask=None, scale=0.001):
+    if isinstance(depth, torch.Tensor):
+        depth = depth.clone().detach().cpu().numpy()
+    if mask and isinstance(mask, torch.Tensor):
+        mask = mask.clone().detach().cpu().numpy()
     intrinsics_inv = np.linalg.inv(intrinsics)
     image_shape = depth.shape
     width = image_shape[1]
@@ -860,6 +864,57 @@ def backproject(depth, intrinsics=np.array([[577.5, 0, 319.5], [0., 577.5, 239.5
     idxs = np.where(final_instance_mask)
     # 交换x,y 并把交换后的y上下颠倒
     grid = np.array([idxs[1], height - idxs[0]])
+
+    length = grid.shape[1]
+    # 生成长度为1*length数组,值全为1
+    ones = np.ones([1, length])
+    # grid:[2, length], ones:[1, length] concatenate之后得到uv_grid:[3, length]
+    # 转换成图像坐标(u,v)的齐次坐标(u,v,1),和投影矩阵的逆矩阵3*3计算
+    uv_grid = np.concatenate((grid, ones), axis=0)  # [3, num_pixel]
+
+    xyz = intrinsics_inv @ uv_grid  # [3, num_pixel]
+    xyz = np.transpose(xyz)  # [num_pixel, 3]
+
+    # 将idx对应索引的点都拿出来
+    z = depth[idxs[0], idxs[1]].astype(np.float32)
+
+    pts = xyz * z[:, np.newaxis] / xyz[:, -1:]
+    pts[:, 2] = -pts[:, 2]   # x, y is divided by |z| during projection --> here depth > 0 = |z| = -z
+
+    # 返回3D坐标(单位已经转换为cm)和2D图像坐标idxs
+    return pts * scale, idxs
+
+def backproject_tensor(depth_batch, intrinsics=np.array([[577.5, 0, 319.5], [0., 577.5, 239.5], [0., 0., 1.]]),
+                mask=None, scale=0.001):
+    intrinsics_inv = np.linalg.inv(intrinsics)
+    image_shape = depth_batch[0].shape
+    width = image_shape[1]
+    height = image_shape[0]
+
+    non_zero_mask = (depth_batch > 0)
+    # mask与深度不为0的点进行逻辑并运算
+    # final_instance_mask中的像素,既在mask中属于某个instance,又在depth中大于0(不为黑色)
+    if mask is not None:
+        final_instance_mask = torch.logical_and(mask, non_zero_mask)
+    else:
+        final_instance_mask = non_zero_mask
+
+    # ===========
+    # 可视化最终的2D mask点
+    # viz_mask = np.zeros(mask.shape)
+    # index = np.where(1-final_instance_mask)
+    # for i in range(len(index[0])):
+    #     viz_mask[index[0][i]][index[1][i]] = 255
+    # 获取到一个实例对象的2D点
+    # cv2.imshow('final_instance_mask', viz_mask)
+    # cv2.waitKey(0)
+    # ===========
+
+    # where返回为True的索引
+    # 获得mask中对应实例像素的坐标(idxs[0][i],idxs[1][i])
+    idxs = torch.where(final_instance_mask)
+    # 交换x,y 并把交换后的y上下颠倒
+    grid[0] = np.array([idxs[2], height - idxs[1]])
 
     length = grid.shape[1]
     # 生成长度为1*length数组,值全为1
