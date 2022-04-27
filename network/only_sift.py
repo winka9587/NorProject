@@ -169,12 +169,18 @@ class SIFT_Track(nn.Module):
             points, idxs = backproject(depth[batch_idx], self.intrinsics, mask=mask[batch_idx])
             points_rgb = color[batch_idx][idxs[0], idxs[1]].astype(np.float32)
             points_nrm = nrm[batch_idx][idxs[0], idxs[1]].astype(np.float32)
-            for i in idx
+            pts_9d = np.concatenate([points,points_rgb,points_nrm], axis=1)
 
         # mask点的数量是不一样的
 
         # rgb
         # 计算batch
+
+        # 对于裁剪后图像大小不一致的问题，可以考虑设置多个统一的尺寸，xmin,ymin,xmax,ymax用来算一个中心点，然后用统一的大小来裁剪
+        # 或者在数据集中就提前测量mask的尺寸？
+        # 但是在视频序列中尺寸变化怎么办？
+        # 那个不用担心，根据前一帧来就行，因为尺寸变化不是突然的
+        # MaskRCNN那个多包围盒是怎么做的，能否借鉴？？？？？？？？？？？
         rgb_emb = self.cnn_pre_stages(inputs['rgb'])  # stride = 2, [bs, c, 240, 320]
         xyz, p_emb = self._break_up_pc(inputs['cld_rgb_nrm'])  # xyz
         p_emb = inputs['cld_rgb_nrm']
