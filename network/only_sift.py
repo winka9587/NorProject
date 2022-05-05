@@ -154,78 +154,85 @@ class SIFT_Track(nn.Module):
 
 
     # 有mask_add_from_last_frame说明是第二帧，需要使用前一帧提供的mask
-    def extract_3D_kp(self, frame, mask):
+    def extract_3D_kp(self, frame, mask_bs):
         # rgb                彩色图像               [bs, 3, h, w]
         # dpt_nrm            图像:xyz+normal       [bs, 6, h, w], 3c xyz in meter + 3c normal map
         # cld_rgb_nrm点云:    xyz+rgb+normal      [bs, 9, npts]
         # choose             应该是mask            [bs, 1, npts]
 
         # 输入color,normal,depth,mask,反投影，得到9通道的点云
-        color = frame['meta']['pre_fetched']['color']
-        depth = frame['meta']['pre_fetched']['depth']
-        nrm = frame['meta']['pre_fetched']['nrm']
+        color_bs = frame['meta']['pre_fetched']['color']
+        depth_bs = frame['meta']['pre_fetched']['depth']
+        nrm_bs = frame['meta']['pre_fetched']['nrm']
 
-        for batch_idx in range(len(depth)):
-            points, idxs = backproject(depth[batch_idx], self.intrinsics, mask=mask[batch_idx])
-            points_rgb = color[batch_idx][idxs[0], idxs[1]].astype(np.float32)
-            points_nrm = nrm[batch_idx][idxs[0], idxs[1]].astype(np.float32)
-            pts_9d = np.concatenate([points,points_rgb,points_nrm], axis=1)
+        # 遍历batch
+        bs = len(depth_bs)
+        for batch_idx in range(bs):
+            color = color_bs[batch_idx]
+            depth = depth_bs[batch_idx]
+            nrm = nrm_bs[batch_idx]
+            mask = mask_bs[batch_idx]
+            # 1.提取几何特征
+            # 根据mask,反投影得到观测点云
+            points, idxs = backproject(depth, self.intrinsics, mask=mask_bs[batch_idx])
+            points_rgb = color[idxs[0], idxs[1]].astype(np.float32)
+            points_nrm = nrm[idxs[0], idxs[1]].astype(np.float32)
+            pts_9d = np.concatenate([points, points_rgb, points_nrm], axis=1)
 
-        # mask点的数量是不一样的
 
-        # rgb
-        # 计算batch
+            # 2.提取颜色特征
+            # 通过mask获得crop_pos
+            def get_crop_pos_by_mask(mask):
+                crop_idx = torch.where(mask)
+                x_max = max(crop_idx[1])
+                x_min = min(crop_idx[1])
+                y_max = max(crop_idx[0])
+                y_min = min(crop_idx[0])
+                crop_pos_tmp = {'x_min': x_min, 'x_max': x_max, 'y_min': y_min, 'y_max': y_max}
+                return crop_pos_tmp
+            def zero_padding_by_mask(img, mask):
+                crop_pos = get_crop_pos_by_mask(mask)
+                img_pad = torch.zeros(img.shape, dtype=img.dtype)
+                img[0:crop_pos['y_min'],]
+                img[crop_pos['y_min']:crop_pos['y_max'], crop_pos['x_min']:crop_pos['x_max']]
 
-        # 对于裁剪后图像大小不一致的问题，可以考虑设置多个统一的尺寸，xmin,ymin,xmax,ymax用来算一个中心点，然后用统一的大小来裁剪
-        # 或者在数据集中就提前测量mask的尺寸？
-        # 但是在视频序列中尺寸变化怎么办？
-        # 那个不用担心，根据前一帧来就行，因为尺寸变化不是突然的
-        # MaskRCNN那个多包围盒是怎么做的，能否借鉴？？？？？？？？？？？
-        rgb_emb = self.cnn_pre_stages(inputs['rgb'])  # stride = 2, [bs, c, 240, 320]
-        xyz, p_emb = self._break_up_pc(inputs['cld_rgb_nrm'])  # xyz
-        p_emb = inputs['cld_rgb_nrm']
-        p_emb = self.rndla_pre_stages(p_emb)  # channel 9 -> 8
-        p_emb = p_emb.unsqueeze(dim=3)  # Batch*channel*npoints*1
-        ds_emb = []
-        # 4个downsampled
-        for i_ds in range(4):
-            # encode rgb downsampled feature
-            rgb_emb0 = self.cnn_ds_stages[i_ds](rgb_emb)
-            bs, c, hr, wr = rgb_emb0.size()
+            crop_pos = get_crop_pos_by_mask(mask_bs[batch_idx])
+            # 根据mask,对周围进行零填充
+            color_zero_padding = color.copy()
+            color_zero_padding[0:crop_pos]
 
-            # encode point cloud downsampled feature
-            f_encoder_i = self.rndla_ds_stages[i_ds](
-                p_emb, inputs['cld_xyz%d' % i_ds], inputs['cld_nei_idx%d' % i_ds]
-            )
-            f_sampled_i = self.random_sample(f_encoder_i, inputs['cld_sub_idx%d' % i_ds])
-            p_emb0 = f_sampled_i
-            if i_ds == 0:
-                ds_emb.append(f_encoder_i)
 
-            # fuse point feauture to rgb feature
-            p2r_emb = self.ds_fuse_p2r_pre_layers[i_ds](p_emb0)
-            p2r_emb = self.nearest_interpolation(
-                p2r_emb, inputs['p2r_ds_nei_idx%d' % i_ds]
-            )
-            p2r_emb = p2r_emb.view(bs, -1, hr, wr)
-            rgb_emb = self.ds_fuse_p2r_fuse_layers[i_ds](
-                torch.cat((rgb_emb0, p2r_emb), dim=1)
-            )
+            # mask点的数量是不一样的
 
-            # fuse rgb feature to point feature
-            r2p_emb = self.random_sample(
-                rgb_emb0.reshape(bs, c, hr * wr, 1), inputs['r2p_ds_nei_idx%d' % i_ds]
-            ).view(bs, c, -1, 1)
-            r2p_emb = self.ds_fuse_r2p_pre_layers[i_ds](r2p_emb)
-            p_emb = self.ds_fuse_r2p_fuse_layers[i_ds](
-                torch.cat((p_emb0, r2p_emb), dim=1)
-            )
-            ds_emb.append(p_emb)
+            # rgb
+            # 计算batch
+
+            # 对于裁剪后图像大小不一致的问题，可以考虑设置多个统一的尺寸，xmin,ymin,xmax,ymax用来算一个中心点，然后用统一的大小来裁剪
+            # 或者在数据集中就提前测量mask的尺寸？
+            # 但是在视频序列中尺寸变化怎么办？
+            # 那个不用担心，根据前一帧来就行，因为尺寸变化不是突然的
+            # MaskRCNN那个多包围盒是怎么做的，能否借鉴？？？？？？？？？？？
+
+            # 22.5.4
+            # 在SGPA的eval代码中
+            # 发现了xmap,ymap 似乎是640x480的，是否裁剪了图像？No，图片本来就是640x480的
+
+            # 图像输入PSP-Net
+            out_img = self.psp(img)
+            di = out_img.size()[1]
+            emb = out_img.view(bs, di, -1)
+            choose = choose.unsqueeze(1).repeat(1, di, 1)
+            emb = torch.gather(emb, 2, choose).contiguous()
+            emb = self.instance_color(emb)
+
+
 
 
         # 还需要做分割mask_for_next
         #
-        return 3d_kps, mask_for_next
+        kps_3d = None
+        mask_for_next = None
+        return kps_3d, mask_for_next
 
     def forward(self):
         # 传入的data分为两部分, 第一帧和后续帧
@@ -239,19 +246,20 @@ class SIFT_Track(nn.Module):
         init_colors = init_pre_fetched['color']
         init_nrms = init_pre_fetched['nrm']
         batch_size = len(init_masks)
-        crop_pos = []
+        init_crop_pos = []
         # 可以对比的点:
         # last_frame 用mask
         # next_frame 用mask_add
-        for i in range(batch_size):
-            idx = torch.where(init_masks[i, :, :])
-            x_max = max(idx[1])
-            x_min = min(idx[1])
-            y_max = max(idx[0])
-            y_min = min(idx[0])
-            crop_pos_tmp = {'x_min': x_min, 'x_max': x_max, 'y_min': y_min, 'y_max': y_max}
-            crop_pos.append(crop_pos_tmp)
+        # for i in range(batch_size):
+        #     idx = torch.where(init_masks[i, :, :])
+        #     x_max = max(idx[1])
+        #     x_min = min(idx[1])
+        #     y_max = max(idx[0])
+        #     y_min = min(idx[0])
+        #     crop_pos_tmp = {'x_min': x_min, 'x_max': x_max, 'y_min': y_min, 'y_max': y_max}
+        #     init_crop_pos.append(crop_pos_tmp)
         use_ = False
+        # 暂时不使用的代码
         if use_:
             # sift
             for i in range(1, len(self.feed_dict)):
@@ -277,22 +285,25 @@ class SIFT_Track(nn.Module):
                     # 取对应的normal map
                     last_crop_nrm = crop_img(last_nrms[j], crop_pos[j])
                     next_crop_nrm = crop_img(next_nrms[j], crop_pos[j])
-
-                    cv2.imshow('color_sift_1', color_sift_1)
-                    cv2.waitKey(0)
-                    cv2.imshow('color_sift_2', color_sift_2)
-                    cv2.waitKey(0)
-
-                    cv2.imshow('nrm_1', norm2bgr(last_crop_nrm))
-                    cv2.waitKey(0)
-                    cv2.imshow('nrm_2', norm2bgr(next_crop_nrm))
-                    cv2.waitKey(0)
+                    # 可视化
+                    # cv2.imshow('color_sift_1', color_sift_1)
+                    # cv2.waitKey(0)
+                    # cv2.imshow('color_sift_2', color_sift_2)
+                    # cv2.waitKey(0)
+                    #
+                    # cv2.imshow('nrm_1', norm2bgr(last_crop_nrm))
+                    # cv2.waitKey(0)
+                    # cv2.imshow('nrm_2', norm2bgr(next_crop_nrm))
+                    # cv2.waitKey(0)
 
                     # 提取3D点并进行匹配
                     # 提取xyz+RGB+normal特征进行匹配
 
-        mask_last_frame = self.feed_dict[0]['meta']['pre_fetched']['mask']
+
         # try FFB6D extract 3D kp
+        mask_last_frame = self.feed_dict[0]['meta']['pre_fetched']['mask']
+        crop_pos_last_frame = init_crop_pos   # 记录每张图像的四个裁剪坐标
+        # 第i帧
         for i in range(1, len(self.feed_dict)):
             last_frame = self.feed_dict[i - 1]
             next_frame = self.feed_dict[1]
@@ -301,9 +312,14 @@ class SIFT_Track(nn.Module):
             next_colors = next_frame['meta']['pre_fetched']['color']
             next_nrms = next_frame['meta']['pre_fetched']['nrm']
             # 提取两帧的3D关键点
+            # 提取第一帧的关键点
             mask_add = self.extract_3D_kp(last_frame, mask_last_frame)
             self.extract_3D_kp(next_frame, mask_add)
             if i != len(self.feed_dict):
+                # 对于不同大小crop CNN的处理
+                # 第一帧就使用addborder(但是对于add的部分是否要调整为0？)
+                # 第二帧用第一帧的addborder
+                # 计算出位姿后,重新计算mask
                 # 还有后续帧
                 # 将第一帧mask后的点云通过RT变换到第二帧,来为之后的帧提供mask
                 mask_last_frame = get_mask()
