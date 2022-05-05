@@ -833,7 +833,7 @@ def backproject(depth, intrinsics=np.array([[577.5, 0, 319.5], [0., 577.5, 239.5
                 mask=None, scale=0.001):
     if isinstance(depth, torch.Tensor):
         depth = depth.clone().detach().cpu().numpy()
-    if mask and isinstance(mask, torch.Tensor):
+    if isinstance(mask, torch.Tensor):
         mask = mask.clone().detach().cpu().numpy()
     intrinsics_inv = np.linalg.inv(intrinsics)
     image_shape = depth.shape

@@ -1,6 +1,6 @@
 # coding=utf-8
 import os
-device_ids = "3"
+device_ids = "4"
 os.environ['CUDA_VISIBLE_DEVICES'] = device_ids
 from data.dataset import RealSeqDataset
 from torch.utils.data import DataLoader

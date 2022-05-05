@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from part_dof_utils import part_model_batch_to_part, eval_part_full, add_noise_to_part_dof, \
     compute_parts_delta_pose
-from utils import cvt_torch, Timer
+from utils import cvt_torch, Timer, add_border_bool
 from network.lib.utils import crop_img
 import numpy as np
 from extract_2D_kp import extract_sift_kp_from_RGB, sift_match
@@ -14,6 +14,9 @@ from normalspeedTest import norm2bgr
 import network.FFB6D_models.pytorch_utils as pt_utils
 # from network.FFB6D_models.RandLA.RandLANet import Network as RandLANet
 from captra_utils.utils_from_captra import backproject
+
+from lib.pspnet import PSPNet
+from lib.pointnet import Pointnet2MSG
 
 class ConfigRandLA:
     k_n = 16  # KNN
@@ -56,6 +59,9 @@ class SIFT_Track(nn.Module):
             self.intrinsics = np.array([[591.0125, 0, 322.525], [0, 590.16775, 244.11084], [0, 0, 1]])
         else:
             self.intrinsics = np.array([[577.5, 0, 319.5], [0., 577.5, 239.5], [0., 0., 1.]])
+
+        # SGPA
+        self.psp = PSPNet(bins=(1, 2, 3, 6), backend='resnet18')
 
         # FFB6D
         # cnn = psp_models['resnet34'.lower()]()
@@ -167,6 +173,7 @@ class SIFT_Track(nn.Module):
 
         # 遍历batch
         bs = len(depth_bs)
+        mask_bs_next = mask_bs.clone()
         for batch_idx in range(bs):
             color = color_bs[batch_idx]
             depth = depth_bs[batch_idx]
@@ -175,50 +182,49 @@ class SIFT_Track(nn.Module):
             # 1.提取几何特征
             # 根据mask,反投影得到观测点云
             points, idxs = backproject(depth, self.intrinsics, mask=mask_bs[batch_idx])
-            points_rgb = color[idxs[0], idxs[1]].astype(np.float32)
-            points_nrm = nrm[idxs[0], idxs[1]].astype(np.float32)
-            pts_9d = np.concatenate([points, points_rgb, points_nrm], axis=1)
+            points = torch.from_numpy(points)
+            points_rgb = color[idxs[0], idxs[1]]
+            points_nrm = nrm[idxs[0], idxs[1]]
+            pts_9d = torch.concat([points, points_rgb, points_nrm], dim=1)
 
 
             # 2.提取颜色特征
             # 通过mask获得crop_pos
             def get_crop_pos_by_mask(mask):
                 crop_idx = torch.where(mask)
-                x_max = max(crop_idx[1])
-                x_min = min(crop_idx[1])
-                y_max = max(crop_idx[0])
-                y_min = min(crop_idx[0])
+                x_max = max(crop_idx[1]).item()
+                x_min = min(crop_idx[1]).item()
+                y_max = max(crop_idx[0]).item()
+                y_min = min(crop_idx[0]).item()
                 crop_pos_tmp = {'x_min': x_min, 'x_max': x_max, 'y_min': y_min, 'y_max': y_max}
                 return crop_pos_tmp
             def zero_padding_by_mask(img, mask):
                 crop_pos = get_crop_pos_by_mask(mask)
-                img_pad = torch.zeros(img.shape, dtype=img.dtype)
-                img[0:crop_pos['y_min'],]
-                img[crop_pos['y_min']:crop_pos['y_max'], crop_pos['x_min']:crop_pos['x_max']]
+                img_zero_pad = torch.zeros(img.shape, dtype=img.dtype)
+                # 创建idx[0] y
+                # 创建indx[1] x
 
-            crop_pos = get_crop_pos_by_mask(mask_bs[batch_idx])
+                idx1 = torch.arange(crop_pos['x_min'], crop_pos['x_max'])
+                idx0 = torch.full(idx1.shape, crop_pos['y_min'])
+                mask_crop_idx0 = idx0
+                mask_crop_idx1 = idx1
+                for y in range(1, crop_pos['y_max']-crop_pos['y_min']):
+                    idx0 = torch.full(idx1.shape, crop_pos['y_min']+y)
+                    mask_crop_idx0 = torch.concat((mask_crop_idx0, idx0))
+                    mask_crop_idx1 = torch.concat((mask_crop_idx1, idx1))
+                mask_crop_idx = (mask_crop_idx0, mask_crop_idx1)
+                img_zero_pad[mask_crop_idx] = img[mask_crop_idx]
+                cv2.imshow('zero', img_zero_pad.numpy())
+                cv2.waitKey(0)
+                return img_zero_pad
+
             # 根据mask,对周围进行零填充
-            color_zero_padding = color.copy()
-            color_zero_padding[0:crop_pos]
-
-
-            # mask点的数量是不一样的
-
-            # rgb
-            # 计算batch
-
-            # 对于裁剪后图像大小不一致的问题，可以考虑设置多个统一的尺寸，xmin,ymin,xmax,ymax用来算一个中心点，然后用统一的大小来裁剪
-            # 或者在数据集中就提前测量mask的尺寸？
-            # 但是在视频序列中尺寸变化怎么办？
-            # 那个不用担心，根据前一帧来就行，因为尺寸变化不是突然的
-            # MaskRCNN那个多包围盒是怎么做的，能否借鉴？？？？？？？？？？？
-
-            # 22.5.4
-            # 在SGPA的eval代码中
-            # 发现了xmap,ymap 似乎是640x480的，是否裁剪了图像？No，图片本来就是640x480的
+            color_zero_pad = zero_padding_by_mask(color, mask_bs[batch_idx])
+            # 为下一帧计算mask_add
+            mask_bs_next[batch_idx] = add_border_bool(mask, kernel_size=10)
 
             # 图像输入PSP-Net
-            out_img = self.psp(img)
+            out_img = self.psp(color_zero_pad)
             di = out_img.size()[1]
             emb = out_img.view(bs, di, -1)
             choose = choose.unsqueeze(1).repeat(1, di, 1)
@@ -231,8 +237,7 @@ class SIFT_Track(nn.Module):
         # 还需要做分割mask_for_next
         #
         kps_3d = None
-        mask_for_next = None
-        return kps_3d, mask_for_next
+        return kps_3d, mask_bs_next
 
     def forward(self):
         # 传入的data分为两部分, 第一帧和后续帧
