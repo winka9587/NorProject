@@ -52,7 +52,10 @@ def add_border(mask, inst_id, kernel_size=10):  # enlarge the region w/ 255
 
 def add_border_bool(mask, kernel_size=10):  # enlarge the region w/ 255
     # print((255 - mask).sum())
-    output = mask.copy()
+    if isinstance(mask, torch.Tensor):
+        output = mask.clone()
+    else:
+        output = mask.copy()
     h, w = mask.shape
     for i in range(h):
         for j in range(w):

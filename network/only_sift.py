@@ -62,6 +62,12 @@ class SIFT_Track(nn.Module):
 
         # SGPA
         self.psp = PSPNet(bins=(1, 2, 3, 6), backend='resnet18')
+        self.n_pts = 1024  # 从mask中采样1024个点，提取颜色特征
+
+        self.instance_color = nn.Sequential(
+            nn.Conv1d(32, 64, 1),
+            nn.ReLU(),
+        )
 
         # FFB6D
         # cnn = psp_models['resnet34'.lower()]()
@@ -174,6 +180,7 @@ class SIFT_Track(nn.Module):
         # 遍历batch
         bs = len(depth_bs)
         mask_bs_next = mask_bs.clone()
+        color_bs_zero_pad = color_bs.clone()
         for batch_idx in range(bs):
             color = color_bs[batch_idx]
             depth = depth_bs[batch_idx]
@@ -185,7 +192,12 @@ class SIFT_Track(nn.Module):
             points = torch.from_numpy(points)
             points_rgb = color[idxs[0], idxs[1]]
             points_nrm = nrm[idxs[0], idxs[1]]
-            pts_9d = torch.concat([points, points_rgb, points_nrm], dim=1)
+            pts_6d = torch.concat([points, points_rgb], dim=1)
+            # 是否可以留着nrm在损失函数里使用？
+            # pts_9d = torch.concat([points, points_rgb, points_nrm], dim=1)
+
+            # 对点云进行一个采样,采样n_pts个点
+            sampling_points
 
 
             # 2.提取颜色特征
@@ -214,22 +226,60 @@ class SIFT_Track(nn.Module):
                     mask_crop_idx1 = torch.concat((mask_crop_idx1, idx1))
                 mask_crop_idx = (mask_crop_idx0, mask_crop_idx1)
                 img_zero_pad[mask_crop_idx] = img[mask_crop_idx]
-                cv2.imshow('zero', img_zero_pad.numpy())
-                cv2.waitKey(0)
+                # cv2.imshow('zero', img_zero_pad.numpy())
+                # cv2.waitKey(0)
                 return img_zero_pad
 
             # 根据mask,对周围进行零填充
             color_zero_pad = zero_padding_by_mask(color, mask_bs[batch_idx])
+            color_bs_zero_pad[batch_idx] = color_zero_pad
             # 为下一帧计算mask_add
             mask_bs_next[batch_idx] = add_border_bool(mask, kernel_size=10)
 
-            # 图像输入PSP-Net
-            out_img = self.psp(color_zero_pad)
-            di = out_img.size()[1]
-            emb = out_img.view(bs, di, -1)
-            choose = choose.unsqueeze(1).repeat(1, di, 1)
-            emb = torch.gather(emb, 2, choose).contiguous()
-            emb = self.instance_color(emb)
+        # 图像输入PSP-Net
+        color_bs_zero_pad = color_bs_zero_pad.cuda()
+        color_bs_zero_pad = color_bs_zero_pad.type(torch.float32)
+
+        # SGPA中,这里的图像已经被裁剪为192x192了
+        # 之后可以测试一下
+        # 这里绝对是可以继续优化的，因为后面choose会将没用的筛选掉，所以这里会计算很多没用CNN
+        # (bs, 3, 640, 480) -> (bs, 32, 640, 480)
+        out_img = self.psp(color_bs_zero_pad.permute(0, 3, 1, 2))
+        di = out_img.size()[1]  # 特征维度 32
+        emb = out_img.view(bs, di, -1)  # 将每张图像的特征变成每个像素点的
+
+        # 对特征进行采样,采样n_pts个点
+        # 从mask中选择
+        def choose_from_mask_bs(mask_bs):
+            output_choose = torch.tensor([])
+            for b_i in range(len(mask_bs)):
+                # get choose pixel index by mask
+                mask = mask_bs[b_i]
+                choose = torch.where(mask.flatten())[0]
+                if len(choose) > self.n_pts:
+                    choose_mask = np.zeros(len(choose), dtype=np.uint8)
+                    choose_mask[:self.n_pts] = 1
+                    np.random.shuffle(choose_mask)
+                    choose = torch.from_numpy(choose_mask.nonzero()[0])
+                else:
+                    # 点的数量不够,需要补齐n_pts个点
+                    # wrap 用前面补后面，用后面补前面
+                    choose = torch.from_numpy(np.pad(choose.numpy(), (0, self.n_pts - len(choose)), 'wrap'))
+                choose = torch.unsqueeze(choose, 0)  # (n_pts, ) -> (1, n_pts)
+                output_choose = torch.cat((output_choose, choose), 0)
+                output_choose = output_choose.type(torch.int64)
+            return output_choose
+        # choose_bs (bs, n_pts=1024)
+        choose_bs = choose_from_mask_bs(mask_bs)
+        choose_bs = choose_bs.cuda()
+        # (bs, n_pts) -> (bs, n_dim=32, n_pts)
+        choose_bs = choose_bs.unsqueeze(1).repeat(1, di, 1)
+        # 根据choose提取对应点的特征
+        emb = torch.gather(emb, 2, choose_bs).contiguous()
+        # emb (bs, 64, n_pts)
+        # emb (10, 64, 1024)
+        # 1024个点的颜色特征，每个点的特征有64维
+        emb = self.instance_color(emb)
 
 
 
