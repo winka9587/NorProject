@@ -1,6 +1,6 @@
 import open3d as o3d
 import numpy as np
-
+import cv2
 
 def viz_multi_points_diff_color(name, pts_list, color_list):
     vis = o3d.visualization.Visualizer()
@@ -31,3 +31,14 @@ def viz_multi_points_diff_color(name, pts_list, color_list):
     # if save_img and result_dir:
     #     vis.capture_screen_image(os.path.join(result_dir, name + '.png'), False)
     vis.destroy_window()
+
+
+# ø… ”ªØmask
+def viz_mask_bool(name, mask):
+    mask_show = np.zeros((mask.shape[0], mask.shape[1], 3), dtype=np.uint8)
+    idx_ = np.where(mask)
+    mask_show[idx_[0], idx_[1], :] = 255
+    # cv2.imshow('rgb', raw_rgb)
+    # cv2.waitKey(0)
+    cv2.imshow(name, mask_show)
+    cv2.waitKey(0)

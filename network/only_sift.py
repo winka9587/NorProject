@@ -18,6 +18,8 @@ from captra_utils.utils_from_captra import backproject
 from lib.pspnet import PSPNet
 from lib.pointnet import Pointnet2MSG
 
+from visualize import viz_multi_points_diff_color, viz_mask_bool
+
 class ConfigRandLA:
     k_n = 16  # KNN
     num_layers = 4  # Number of layers
@@ -57,8 +59,10 @@ class SIFT_Track(nn.Module):
 
         if real:
             self.intrinsics = np.array([[591.0125, 0, 322.525], [0, 590.16775, 244.11084], [0, 0, 1]])
+            self.cam_fx, self.cam_fy, self.cam_cx, self.cam_cy = 591.0125, 590.16775, 322.525, 244.11084
         else:
             self.intrinsics = np.array([[577.5, 0, 319.5], [0., 577.5, 239.5], [0., 0., 1.]])
+            self.cam_fx, self.cam_fy, self.cam_cx, self.cam_cy = 577.5, 577.5, 319.5, 239.5
 
         # SGPA
         self.psp = PSPNet(bins=(1, 2, 3, 6), backend='resnet18')
@@ -69,6 +73,10 @@ class SIFT_Track(nn.Module):
             nn.ReLU(),
         )
 
+        # 反投影用
+        self.xmap = np.array([[i for i in range(640)] for j in range(480)])
+        self.ymap = np.array([[j for i in range(640)] for j in range(480)])
+        self.norm_scale = 1000.0
         # FFB6D
         # cnn = psp_models['resnet34'.lower()]()
         # self.cnn_pre_stages = nn.Sequential(
@@ -176,28 +184,88 @@ class SIFT_Track(nn.Module):
         color_bs = frame['meta']['pre_fetched']['color']
         depth_bs = frame['meta']['pre_fetched']['depth']
         nrm_bs = frame['meta']['pre_fetched']['nrm']
+        # 从mask中提取n_pts个点的下标 choose
+        def choose_from_mask_bs(mask_bs):
+            output_choose = torch.tensor([])
+            mask_bs_choose = torch.full(mask_bs.shape, False)
+            for b_i in range(len(mask_bs)):
+                # get choose pixel index by mask
+                mask = mask_bs[b_i]
+                mask_flatten = torch.full(mask.flatten().shape, False)  # 为了确定采样点的像素坐标
+                choose = torch.where(mask.flatten())[0]
+                if len(choose) > self.n_pts:
+                    choose_mask = np.zeros(len(choose), dtype=np.uint8)
+                    choose_mask[:self.n_pts] = 1
+                    np.random.shuffle(choose_mask)
+                    choose_mask = torch.from_numpy(choose_mask)
+                    choose = choose[choose_mask.nonzero()]
+                else:
+                    # 点的数量不够,需要补齐n_pts个点
+                    # wrap 用前面补后面，用后面补前面
+                    choose = torch.from_numpy(np.pad(choose.numpy(), (0, self.n_pts - len(choose)), 'wrap'))
+                mask_flatten[choose] = True
+                mask_flatten = mask_flatten.view(mask.shape).numpy()
+                # 可视化mask
+                # viz_mask_bool('mask_flatten', mask_flatten)
+                choose = torch.unsqueeze(choose, 0)  # (n_pts, ) -> (1, n_pts)
+                output_choose = torch.cat((output_choose, choose), 0)
+                output_choose = output_choose.type(torch.int64)
+            return output_choose
+        choose_bs = choose_from_mask_bs(mask_bs)  # choose_bs (bs, n_pts=1024)
+        choose_bs = choose_bs.cuda()
+        # mask_bs_choose = mask_bs_choose.cuda()
 
         # 遍历batch
         bs = len(depth_bs)
         mask_bs_next = mask_bs.clone()
         color_bs_zero_pad = color_bs.clone()
+
+
         for batch_idx in range(bs):
             color = color_bs[batch_idx]
             depth = depth_bs[batch_idx]
             nrm = nrm_bs[batch_idx]
             mask = mask_bs[batch_idx]
+            choose = choose_bs[batch_idx]
+
             # 1.提取几何特征
             # 根据mask,反投影得到观测点云
-            points, idxs = backproject(depth, self.intrinsics, mask=mask_bs[batch_idx])
-            points = torch.from_numpy(points)
-            points_rgb = color[idxs[0], idxs[1]]
-            points_nrm = nrm[idxs[0], idxs[1]]
-            pts_6d = torch.concat([points, points_rgb], dim=1)
-            # 是否可以留着nrm在损失函数里使用？
-            # pts_9d = torch.concat([points, points_rgb, points_nrm], dim=1)
+            # points, idxs = backproject(depth, self.intrinsics, mask=mask_bs[batch_idx])
+            # CAPTRA 反投影得到点云
+            # points, idxs = backproject(depth, self.intrinsics)
+            # points = torch.from_numpy(points).cuda()
+            # points_rgb = color[idxs[0], idxs[1]].cuda()
+            # points_nrm = nrm[idxs[0], idxs[1]].cuda()
+            # pts_6d = torch.concat([points, points_rgb], dim=1)
+            # SPD反投影得到点云
+            choose = choose.cpu().numpy()
+            depth_masked = depth.flatten()[choose][:, np.newaxis]       # 对点云进行一个采样,采样n_pts个点
+            xmap_masked = self.xmap.flatten()[choose][:, np.newaxis]     # 像素坐标u
+            ymap_masked = self.ymap.flatten()[choose][:, np.newaxis]     # 像素坐标v
+            pt2 = depth_masked / self.norm_scale
+            pt2 = pt2.numpy()                               # z
+            pt0 = (xmap_masked - self.cam_cx) * pt2 / self.cam_fx     # x
+            pt1 = (ymap_masked - self.cam_cy) * pt2 / self.cam_fy     # y
+            points = np.concatenate((pt0, pt1, pt2), axis=1)
+            points = points.squeeze(2)  # points (1024, 3)
 
-            # 对点云进行一个采样,采样n_pts个点
-            sampling_points
+            # 测试读取rgb
+            # rgb_show = torch.zeros(color.shape, dtype=torch.uint8)
+            # rgb_show[ymap_masked, xmap_masked, 0] = color[ymap_masked, xmap_masked, 0]
+            # rgb_show[ymap_masked, xmap_masked, 1] = color[ymap_masked, xmap_masked, 1]
+            # rgb_show[ymap_masked, xmap_masked, 2] = color[ymap_masked, xmap_masked, 2]
+            # cv2.imshow('rgb', rgb_show.numpy())
+            # cv2.waitKey(0)
+
+            points_rgb = color[ymap_masked, xmap_masked]
+            points_rgb = points_rgb.squeeze(1).squeeze(1)  # points_rgb (1024, 3)
+            points_nrm = nrm[ymap_masked, xmap_masked]
+            points_nrm = points_nrm.squeeze(1).squeeze(1)
+            # 如果要增加对噪声点的过滤，需要重新采样(重新计算choose)，或者在计算choose之前就进行过滤
+            # viz_multi_points_diff_color(f'pts:{batch_idx}', [points], [np.array([[1, 0, 0]])])
+            # 拼接三个不同的特征
+            # 是否可以留着nrm在损失函数里使用？
+            pts_9d = torch.concat([points, points_rgb, points_nrm], dim=1)
 
 
             # 2.提取颜色特征
@@ -210,6 +278,7 @@ class SIFT_Track(nn.Module):
                 y_min = min(crop_idx[0]).item()
                 crop_pos_tmp = {'x_min': x_min, 'x_max': x_max, 'y_min': y_min, 'y_max': y_max}
                 return crop_pos_tmp
+
             def zero_padding_by_mask(img, mask):
                 crop_pos = get_crop_pos_by_mask(mask)
                 img_zero_pad = torch.zeros(img.shape, dtype=img.dtype)
@@ -226,8 +295,8 @@ class SIFT_Track(nn.Module):
                     mask_crop_idx1 = torch.concat((mask_crop_idx1, idx1))
                 mask_crop_idx = (mask_crop_idx0, mask_crop_idx1)
                 img_zero_pad[mask_crop_idx] = img[mask_crop_idx]
-                # cv2.imshow('zero', img_zero_pad.numpy())
-                # cv2.waitKey(0)
+                cv2.imshow(f'zero:{batch_idx}', img_zero_pad.numpy())
+                cv2.waitKey(0)
                 return img_zero_pad
 
             # 根据mask,对周围进行零填充
@@ -249,29 +318,6 @@ class SIFT_Track(nn.Module):
         emb = out_img.view(bs, di, -1)  # 将每张图像的特征变成每个像素点的
 
         # 对特征进行采样,采样n_pts个点
-        # 从mask中选择
-        def choose_from_mask_bs(mask_bs):
-            output_choose = torch.tensor([])
-            for b_i in range(len(mask_bs)):
-                # get choose pixel index by mask
-                mask = mask_bs[b_i]
-                choose = torch.where(mask.flatten())[0]
-                if len(choose) > self.n_pts:
-                    choose_mask = np.zeros(len(choose), dtype=np.uint8)
-                    choose_mask[:self.n_pts] = 1
-                    np.random.shuffle(choose_mask)
-                    choose = torch.from_numpy(choose_mask.nonzero()[0])
-                else:
-                    # 点的数量不够,需要补齐n_pts个点
-                    # wrap 用前面补后面，用后面补前面
-                    choose = torch.from_numpy(np.pad(choose.numpy(), (0, self.n_pts - len(choose)), 'wrap'))
-                choose = torch.unsqueeze(choose, 0)  # (n_pts, ) -> (1, n_pts)
-                output_choose = torch.cat((output_choose, choose), 0)
-                output_choose = output_choose.type(torch.int64)
-            return output_choose
-        # choose_bs (bs, n_pts=1024)
-        choose_bs = choose_from_mask_bs(mask_bs)
-        choose_bs = choose_bs.cuda()
         # (bs, n_pts) -> (bs, n_dim=32, n_pts)
         choose_bs = choose_bs.unsqueeze(1).repeat(1, di, 1)
         # 根据choose提取对应点的特征
