@@ -49,6 +49,7 @@ def train():
         print(f'data index {i}')
         estimator.set_data(data)
         estimator.update()
+
         # print(data['path'])
         # if 'real' in mode:
         #     # Real

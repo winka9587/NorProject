@@ -17,6 +17,7 @@ from captra_utils.utils_from_captra import backproject
 
 from lib.pspnet import PSPNet
 from lib.pointnet import Pointnet2MSG
+from lib.loss import Loss
 
 from visualize import viz_multi_points_diff_color, viz_mask_bool
 
@@ -79,8 +80,15 @@ class SIFT_Track(nn.Module):
             nn.ReLU(),
             nn.AdaptiveAvgPool1d(1),
         )
-
-
+        self.assignment = nn.Sequential(
+            nn.Conv1d(2176, 512, 1),
+            nn.ReLU(),
+            nn.Conv1d(512, 256, 1),
+            nn.ReLU(),
+            nn.Conv1d(256, self.n_pts, 1),
+        )
+        # Loss
+        self.criterion = Loss(opt.corr_wt, opt.cd_wt, opt.entropy_wt, opt.deform_wt)
 
         # 反投影用
         self.xmap = np.array([[i for i in range(640)] for j in range(480)])
@@ -185,13 +193,14 @@ class SIFT_Track(nn.Module):
     def get_assgin_matrix(self, inst_local, inst_global, cat_global):
         assign_feat = torch.cat((inst_local, inst_global.repeat(1, 1, self.n_pts), cat_global.repeat(1, 1, self.n_pts)),
                                 dim=1)  # bs x 2176 x n_pts
-        assign_mat = self.assignment(assign_feat)
+        assign_mat = self.assignment(assign_feat)  # bs x 1024 x 1024  (bs, n_pts_2, npts_1)
         # nv原本是prior点的数量,但这里因为用的是实例点云(只是不同帧而已),所以与self.n_pts相同
         nv = self.n_pts
-        assign_mat = assign_mat.view(-1, nv, self.n_pts).contiguous()  # bs, nc*nv, n_pts -> bs*nc, nv, n_pts
+        assign_mat = assign_mat.view(-1, nv, self.n_pts).contiguous()  # bs, nv, n_pts -> bs, nv, n_pts
 
-        assign_mat = torch.index_select(assign_mat, 0, index)  # bs x nv x n_pts
+        # assign_mat = torch.index_select(assign_mat, 0, index)  # 删除softmax这一部分
         assign_mat = assign_mat.permute(0, 2, 1).contiguous()  # bs x n_pts x nv
+        return assign_mat
 
     # 有mask_add_from_last_frame说明是第二帧，需要使用前一帧提供的mask
     def extract_3D_kp(self, frame, mask_bs):
@@ -448,19 +457,22 @@ class SIFT_Track(nn.Module):
 
             # 参考SGPA计算对应矩阵A
             # 1 -> 2
-            A1 = get_assgin_matrix(inst_local_1, inst_global_1, inst_global_2)
+            # pts1 = A1*pts2
+            assign_matrix_1 = self.get_assgin_matrix(inst_local_1, inst_global_1, inst_global_2)
 
             # 2 -> 1
-            A2 = get_assgin_matrix(inst_local_2, inst_global_2, inst_global_1)
+            # pts2 = A2*pts1
+            assign_matrix_2 = self.get_assgin_matrix(inst_local_2, inst_global_2, inst_global_1)
 
-            if i != len(self.feed_dict):
-                # 对于不同大小crop CNN的处理
-                # 第一帧就使用addborder(但是对于add的部分是否要调整为0？)
-                # 第二帧用第一帧的addborder
-                # 计算出位姿后,重新计算mask
-                # 还有后续帧
-                # 将第一帧mask后的点云通过RT变换到第二帧,来为之后的帧提供mask
-                mask_last_frame = get_mask()
+            return assign_matrix_1, assign_matrix_2
+            # if i != len(self.feed_dict):
+            #     # 对于不同大小crop CNN的处理
+            #     # 第一帧就使用addborder(但是对于add的部分是否要调整为0？)
+            #     # 第二帧用第一帧的addborder
+            #     # 计算出位姿后,重新计算mask
+            #     # 还有后续帧
+            #     # 将第一帧mask后的点云通过RT变换到第二帧,来为之后的帧提供mask
+            #     mask_last_frame = get_mask()
 
 
 
@@ -491,7 +503,9 @@ class SIFT_Track(nn.Module):
             self.npcs_feed_dict.append(self.convert_subseq_frame_npcs_data(frame))
 
     def update(self):
-        self.forward()
+        assign_matrix_1, assign_matrix_2 = self.forward()
+        # 计算loss
+        self.criterion(assign_matrix_1, assign_matrix_2)
         # 调用forward,并计算loss
         # self.forward(save=save)
         # if not no_eval:
