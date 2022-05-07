@@ -18,11 +18,14 @@ FP_MLPS = [[64, 64], [128, 128], [256, 256], [512, 512]]
 CLS_FC = [128]
 DP_RATIO = 0.5
 
+
+# MSG Multi-scale grouping 多尺度分组
+# 以质心为中心,使用不同的球半径划分局部区域,提取多尺度的特征后再concat
 class Pointnet2MSG(nn.Module):
     def __init__(self, input_channels=6):
         super().__init__()
 
-        self.SA_modules = nn.ModuleList()
+        self.SA_modules = nn.ModuleList()  # 采样层
         channel_in = input_channels
 
         skip_channel_list = [input_channels]

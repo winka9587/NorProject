@@ -67,11 +67,20 @@ class SIFT_Track(nn.Module):
         # SGPA
         self.psp = PSPNet(bins=(1, 2, 3, 6), backend='resnet18')
         self.n_pts = 1024  # 从mask中采样1024个点，提取颜色特征
-
+        self.instance_geometry = Pointnet2MSG(0)
         self.instance_color = nn.Sequential(
             nn.Conv1d(32, 64, 1),
             nn.ReLU(),
         )
+        self.instance_global = nn.Sequential(
+            nn.Conv1d(128, 128, 1),
+            nn.ReLU(),
+            nn.Conv1d(128, 1024, 1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool1d(1),
+        )
+
+
 
         # 反投影用
         self.xmap = np.array([[i for i in range(640)] for j in range(480)])
@@ -172,6 +181,17 @@ class SIFT_Track(nn.Module):
         input['points_mean'] = data['meta']['points_mean'].float().to(self.device)
         return input
 
+    # 估计对应矩阵
+    def get_assgin_matrix(self, inst_local, inst_global, cat_global):
+        assign_feat = torch.cat((inst_local, inst_global.repeat(1, 1, self.n_pts), cat_global.repeat(1, 1, self.n_pts)),
+                                dim=1)  # bs x 2176 x n_pts
+        assign_mat = self.assignment(assign_feat)
+        # nv原本是prior点的数量,但这里因为用的是实例点云(只是不同帧而已),所以与self.n_pts相同
+        nv = self.n_pts
+        assign_mat = assign_mat.view(-1, nv, self.n_pts).contiguous()  # bs, nc*nv, n_pts -> bs*nc, nv, n_pts
+
+        assign_mat = torch.index_select(assign_mat, 0, index)  # bs x nv x n_pts
+        assign_mat = assign_mat.permute(0, 2, 1).contiguous()  # bs x n_pts x nv
 
     # 有mask_add_from_last_frame说明是第二帧，需要使用前一帧提供的mask
     def extract_3D_kp(self, frame, mask_bs):
@@ -220,6 +240,7 @@ class SIFT_Track(nn.Module):
         mask_bs_next = mask_bs.clone()
         color_bs_zero_pad = color_bs.clone()
 
+        points_feat_bs = torch.tensor([]).cuda()  # 提取的几何特征
 
         for batch_idx in range(bs):
             color = color_bs[batch_idx]
@@ -247,7 +268,7 @@ class SIFT_Track(nn.Module):
             pt0 = (xmap_masked - self.cam_cx) * pt2 / self.cam_fx     # x
             pt1 = (ymap_masked - self.cam_cy) * pt2 / self.cam_fy     # y
             points = np.concatenate((pt0, pt1, pt2), axis=1)
-            points = points.squeeze(2)  # points (1024, 3)
+            points = torch.from_numpy(np.transpose(points, (2, 0, 1))).cuda()  # points (1, 1024, 3) -> (1, 1024, 3)
 
             # 测试读取rgb
             # rgb_show = torch.zeros(color.shape, dtype=torch.uint8)
@@ -258,16 +279,16 @@ class SIFT_Track(nn.Module):
             # cv2.waitKey(0)
 
             points_rgb = color[ymap_masked, xmap_masked]
-            points_rgb = points_rgb.squeeze(1).squeeze(1)  # points_rgb (1024, 3)
+            points_rgb = points_rgb.squeeze(1).transpose(1, 0).cuda()  # points_rgb (1024, 1, 3) -> (1, 1024, 3)
             points_nrm = nrm[ymap_masked, xmap_masked]
-            points_nrm = points_nrm.squeeze(1).squeeze(1)
+            points_nrm = points_nrm.squeeze(1).transpose(1, 0).cuda()  # points_nrm (1024, 1, 3) -> (1, 1024, 3)
             # 如果要增加对噪声点的过滤，需要重新采样(重新计算choose)，或者在计算choose之前就进行过滤
             # viz_multi_points_diff_color(f'pts:{batch_idx}', [points], [np.array([[1, 0, 0]])])
             # 拼接三个不同的特征
             # 是否可以留着nrm在损失函数里使用？
-            pts_9d = torch.concat([points, points_rgb, points_nrm], dim=1)
-
-
+            #  -> (1, 1024, 3) ->  -> (1, 1024, 9)
+            pts_9d = torch.concat([points, points_rgb, points_nrm], dim=2)
+            points_feat_bs = torch.cat((points_feat_bs, pts_9d), 0)
             # 2.提取颜色特征
             # 通过mask获得crop_pos
             def get_crop_pos_by_mask(mask):
@@ -295,8 +316,9 @@ class SIFT_Track(nn.Module):
                     mask_crop_idx1 = torch.concat((mask_crop_idx1, idx1))
                 mask_crop_idx = (mask_crop_idx0, mask_crop_idx1)
                 img_zero_pad[mask_crop_idx] = img[mask_crop_idx]
-                cv2.imshow(f'zero:{batch_idx}', img_zero_pad.numpy())
-                cv2.waitKey(0)
+                # 可视化零填充后的mask,bbox之外应该都是黑色
+                # cv2.imshow(f'zero:{batch_idx}', img_zero_pad.numpy())
+                # cv2.waitKey(0)
                 return img_zero_pad
 
             # 根据mask,对周围进行零填充
@@ -305,7 +327,11 @@ class SIFT_Track(nn.Module):
             # 为下一帧计算mask_add
             mask_bs_next[batch_idx] = add_border_bool(mask, kernel_size=10)
 
-        # 图像输入PSP-Net
+        # 提取几何特征
+        points_feat_bs = points_feat_bs.type(torch.float32)  # points_feat_bs (bs, 1024, 3)
+        points_feat = self.instance_geometry(points_feat_bs[:, :, :3])  # points_feat (bs, 64, 1024)
+
+        # 图像输入PSP-Net, 提取RGB特征
         color_bs_zero_pad = color_bs_zero_pad.cuda()
         color_bs_zero_pad = color_bs_zero_pad.type(torch.float32)
 
@@ -319,7 +345,7 @@ class SIFT_Track(nn.Module):
 
         # 对特征进行采样,采样n_pts个点
         # (bs, n_pts) -> (bs, n_dim=32, n_pts)
-        choose_bs = choose_bs.unsqueeze(1).repeat(1, di, 1)
+        choose_bs = choose_bs.transpose(1, 2).repeat(1, di, 1)
         # 根据choose提取对应点的特征
         emb = torch.gather(emb, 2, choose_bs).contiguous()
         # emb (bs, 64, n_pts)
@@ -327,13 +353,16 @@ class SIFT_Track(nn.Module):
         # 1024个点的颜色特征，每个点的特征有64维
         emb = self.instance_color(emb)
 
-
-
+        # 至此已经得到了(bs, 64, 1024)的几何特征与(bs, 64, 1024)的颜色特征
+        # 将两者拼接得到instance local特征
+        inst_local = torch.cat((points_feat, emb), dim=1)   # bs x 128 x 1024
+        inst_global = self.instance_global(inst_local)      # bs x 1024 x 1
 
         # 还需要做分割mask_for_next
         #
-        kps_3d = None
-        return kps_3d, mask_bs_next
+        # kps_3d = None
+        # mask_bs_next 给下一帧使用的mask
+        return inst_local, inst_global, mask_bs_next
 
     def forward(self):
         # 传入的data分为两部分, 第一帧和后续帧
@@ -414,8 +443,16 @@ class SIFT_Track(nn.Module):
             next_nrms = next_frame['meta']['pre_fetched']['nrm']
             # 提取两帧的3D关键点
             # 提取第一帧的关键点
-            mask_add = self.extract_3D_kp(last_frame, mask_last_frame)
-            self.extract_3D_kp(next_frame, mask_add)
+            inst_local_1, inst_global_1, mask_bs_next = self.extract_3D_kp(last_frame, mask_last_frame)
+            inst_local_2, inst_global_2, _ = self.extract_3D_kp(next_frame, mask_bs_next)
+
+            # 参考SGPA计算对应矩阵A
+            # 1 -> 2
+            A1 = get_assgin_matrix(inst_local_1, inst_global_1, inst_global_2)
+
+            # 2 -> 1
+            A2 = get_assgin_matrix(inst_local_2, inst_global_2, inst_global_1)
+
             if i != len(self.feed_dict):
                 # 对于不同大小crop CNN的处理
                 # 第一帧就使用addborder(但是对于add的部分是否要调整为0？)
