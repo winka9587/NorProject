@@ -39,7 +39,7 @@ def train():
     emb_dim = 512
     num_points = 1024
     resume_model = ''
-    estimator = SIFT_Track(device=device, real=('real' in mode))
+    estimator = SIFT_Track(device=device, real=('real' in mode), mode='train')
     # estimator = torch.nn.DataParallel(estimator, device_ids)
     estimator.cuda()
     if resume_model != '':

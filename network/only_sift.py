@@ -47,11 +47,12 @@ class ConfigRandLA:
 
 
 class SIFT_Track(nn.Module):
-    def __init__(self, device, real, subseq_len=2):
+    def __init__(self, device, real, subseq_len=2, mode='train'):
         super(SIFT_Track, self).__init__()
         # self.fc1 = nn.Linear(emb_dim, 512)
         # self.fc2 = nn.Linear(512, 1024)
         # self.fc3 = nn.Linear(1024, 3*n_pts)
+        self.mode = mode
         self.subseq_len = subseq_len
         self.device = device
         self.num_parts = 1
@@ -88,7 +89,11 @@ class SIFT_Track(nn.Module):
             nn.Conv1d(256, self.n_pts, 1),
         )
         # Loss
-        self.criterion = Loss(opt.corr_wt, opt.cd_wt, opt.entropy_wt, opt.deform_wt)
+        corr_wt = 1.0
+        cd_wt = 5.0
+        entropy_wt = 0.0001
+        deform_wt = 0.01
+        self.criterion = Loss(corr_wt, cd_wt, entropy_wt, deform_wt)  # SPD 的loss
 
         # 反投影用
         self.xmap = np.array([[i for i in range(640)] for j in range(480)])
@@ -190,6 +195,8 @@ class SIFT_Track(nn.Module):
         return input
 
     # 估计对应矩阵
+    # bs x n_pts x nv
+    # (10, 1024, 1024)
     def get_assgin_matrix(self, inst_local, inst_global, cat_global):
         assign_feat = torch.cat((inst_local, inst_global.repeat(1, 1, self.n_pts), cat_global.repeat(1, 1, self.n_pts)),
                                 dim=1)  # bs x 2176 x n_pts
@@ -505,13 +512,13 @@ class SIFT_Track(nn.Module):
     def update(self):
         assign_matrix_1, assign_matrix_2 = self.forward()
         # 计算loss
-        self.criterion(assign_matrix_1, assign_matrix_2)
+        if self.mode == 'train':
+            self.criterion(assign_matrix_1, assign_matrix_2)
         # 调用forward,并计算loss
         # self.forward(save=save)
         # if not no_eval:
         #     self.compute_loss(test=True, per_instance=save, eval_iou=True, test_prefix='test')
         # else:
         #     self.loss_dict = {}
-        pass
 
 
