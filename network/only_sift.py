@@ -19,6 +19,8 @@ from lib.pspnet import PSPNet
 from lib.pointnet import Pointnet2MSG
 from lib.loss import Loss
 
+from torch.optim import lr_scheduler
+
 from visualize import viz_multi_points_diff_color, viz_mask_bool
 
 class ConfigRandLA:
@@ -44,7 +46,37 @@ class ConfigRandLA:
 #     'resnet34': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=512, deep_features_size=256, backend='resnet34'),
 #     'resnet50': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, backend='resnet50'),
 # }
+def get_scheduler(optimizer, cfg, it=-1):
+    scheduler = None
+    if optimizer is None:
+        return scheduler
+    if 'lr_policy' not in cfg or cfg['lr_policy'] == 'constant':
+        scheduler = None  # constant scheduler
+    elif cfg['lr_policy'] == 'step':
+        scheduler = lr_scheduler.StepLR(optimizer,
+                                        step_size=cfg['lr_step_size'],
+                                        gamma=cfg['lr_gamma'],
+                                        last_epoch=it)
+    else:
+        assert 0, '{} not implemented'.format(cfg['lr_policy'])
+    return scheduler
 
+
+def get_optimizer(params, cfg):
+    if len(params) == 0:
+        return None
+    if cfg['optimizer'] == 'Adam':
+        optimizer = torch.optim.Adam(
+            params, lr=cfg['learning_rate'],
+            betas=(0.9, 0.999), eps=1e-08,
+            weight_decay=cfg['weight_decay'])
+    elif cfg['optimizer'] == 'SGD':
+        optimizer = torch.optim.SGD(
+            params, lr=cfg['learning_rate'],
+            momentum=0.9)
+    else:
+        assert 0, "Unsupported optimizer type {}".format(cfg['optimizer'])
+    return optimizer
 
 class SIFT_Track(nn.Module):
     def __init__(self, device, real, subseq_len=2, mode='train'):
@@ -121,6 +153,8 @@ class SIFT_Track(nn.Module):
         # ])
         # self.ds_sr = [4, 8, 8, 8]
 
+        self.optimizer = get_optimizer([p for p in self.model.parameters() if p.requires_grad], cfg)
+        self.scheduler = get_scheduler(self.optimizer, cfg)
 
 
 
@@ -513,7 +547,10 @@ class SIFT_Track(nn.Module):
         assign_matrix_1, assign_matrix_2 = self.forward()
         # 计算loss
         if self.mode == 'train':
-            self.criterion(assign_matrix_1, assign_matrix_2)
+            total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2 = self.criterion(assign_matrix_1, assign_matrix_2)
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
         # 调用forward,并计算loss
         # self.forward(save=save)
         # if not no_eval:

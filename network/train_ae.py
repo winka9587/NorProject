@@ -44,23 +44,23 @@ def train():
     estimator.cuda()
     if resume_model != '':
         estimator.load_state_dict(torch.load(resume_model))
+    for epoch in range(opt.start_epoch, opt.max_epoch + 1):
+        for i, data in enumerate(train_dataloader):
+            print(f'data index {i}')
+            estimator.set_data(data)
+            estimator.update()
 
-    for i, data in enumerate(train_dataloader):
-        print(f'data index {i}')
-        estimator.set_data(data)
-        estimator.update()
+            # print(data['path'])
+            # if 'real' in mode:
+            #     # Real
+            #     replace_str = '_composed'
+            # else:
+            #     replace_str = '_depth'
+            # # 如何操作batch？？？？for？？？？看看captra和SPD是怎么做的
+            # # depth = cv2.imread()
+            # 读取深度图和mask， mask add_border， 提取normal map ， 自编码器训练
 
-        # print(data['path'])
-        # if 'real' in mode:
-        #     # Real
-        #     replace_str = '_composed'
-        # else:
-        #     replace_str = '_depth'
-        # # 如何操作batch？？？？for？？？？看看captra和SPD是怎么做的
-        # # depth = cv2.imread()
-        # 读取深度图和mask， mask add_border， 提取normal map ， 自编码器训练
-
-        # 在forward中 ,首先用mask add_border,然后裁剪depth，输入normalspeed
+            # 在forward中 ,首先用mask add_border,然后裁剪depth，输入normalspeed
 
 
 if __name__ == "__main__":

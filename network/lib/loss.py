@@ -42,6 +42,12 @@ class Loss(nn.Module):
         corr_loss = self.corr_wt * corr_loss
         return corr_loss
 
+    def get_RegularizationLoss(self, assign_mat, soft_assign):
+        log_assign = F.log_softmax(assign_mat, dim=2)
+        entropy_loss = torch.mean(-torch.sum(soft_assign * log_assign, 2))
+        entropy_loss = self.entropy_wt * entropy_loss
+        return entropy_loss
+
     def forward(self, assign_mat_1, points_1, assign_mat_2, points_2):
         # def forward(self, assign_mat, deltas, prior, nocs, model):
         """
@@ -50,47 +56,29 @@ class Loss(nn.Module):
             deltas: bs x nv x 3
             prior: bs x nv x 3
         """
-        # SPD的loss包含四部分
         # 1. Correspondence Loss
-        # 类先验施加形变场,得到恢复出的实例模型
-        inst_shape = prior + deltas
-
         soft_assign_1 = F.softmax(assign_mat_1, dim=2)
         soft_assign_2 = F.softmax(assign_mat_2, dim=2)
 
-        self.get_corr_loss(soft_assign_1, points_1, points_2)
-        self.get_corr_loss(soft_assign_2, points_2, points_1)
-        # soft_assign与重建的点云相乘,得到预测的nocs坐标
-        # 与实际的nocs作差,得到误差diff
-        # torch.bmm batch matrix multiply 两个参数的第一维度应该是相同的
-        # 矩阵相乘 (bs, n_pts, nv) x (bs, nv, 3)
-        coords_1 = torch.bmm(soft_assign_1, points_1)  # (bs, n_pts, 3)
-        coords_2 = torch.bmm(soft_assign_2, points_2)  # (bs, n_pts, 3)
-        # inst_shape和nocs点的数量都是n_pts(被choose约束了)
-        # 变形后的prior(coords)与gt点云(nocs)的误差
-        # smooth L1 loss
-        diff = torch.abs(coords - nocs)  # (bs, n_pts, 3)
-        less = torch.pow(diff, 2) / (2.0 * self.threshold)
-        higher = diff - self.threshold / 2.0
-        corr_loss = torch.where(diff > self.threshold, higher, less)  # (idx0, idx1)
-        corr_loss = torch.mean(torch.sum(corr_loss, dim=2))  # 对每个对应矩阵的行求和,然后对每行的和求平均值
-        corr_loss = self.corr_wt * corr_loss
+        corr_loss_1 = self.get_corr_loss(soft_assign_1, points_1, points_2)
+        corr_loss_2 = self.get_corr_loss(soft_assign_2, points_2, points_1)
+
 
         # 2. Regularization Loss
         # entropy loss to encourage peaked distribution
-        log_assign = F.log_softmax(assign_mat, dim=2)
-        entropy_loss = torch.mean(-torch.sum(soft_assign * log_assign, 2))
-        entropy_loss = self.entropy_wt * entropy_loss
+        entropy_loss_1 = self.get_RegularizationLoss(assign_mat_1, soft_assign_1)
+        entropy_loss_2 = self.get_RegularizationLoss(assign_mat_2, soft_assign_2)
 
         # 3. CD Loss
         # cd-loss for instance reconstruction
-        cd_loss, _, _ = self.chamferloss(inst_shape, model)
-        cd_loss = self.cd_wt * cd_loss
+        # cd_loss, _, _ = self.chamferloss(inst_shape, model)
+        # cd_loss = self.cd_wt * cd_loss
 
         # 4. Deform Loss
         # L2 regularizations on deformation
         # deform_loss = torch.norm(deltas, p=2, dim=2).mean()
         # deform_loss = self.deform_wt * deform_loss
         # total loss
-        total_loss = corr_loss + entropy_loss + cd_loss + deform_loss
-        return total_loss, corr_loss, cd_loss, entropy_loss, deform_loss
+        # total_loss = corr_loss + entropy_loss + cd_loss + deform_loss
+        total_loss = corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2
+        return total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2
