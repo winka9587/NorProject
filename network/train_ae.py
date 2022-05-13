@@ -112,7 +112,7 @@ def train(opt):
             # 评估位姿
             # points1和points2计算位姿
             total_loss = 0.0
-            for frame_pair_idx in len(points_assign_mat_list):
+            for frame_pair_idx in range(len(points_assign_mat_list)):
                 frame_pair = points_assign_mat_list[frame_pair_idx]
                 points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2 = frame_pair
                 assigned_points2 = torch.bmm(assign_matrix_bs_2, points_bs_1)
