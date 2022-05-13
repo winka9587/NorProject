@@ -846,3 +846,194 @@ def crop_img(img, crop_pos_dict):
     img_res = img[crop_pos_dict['y_min']:crop_pos_dict['y_max'], crop_pos_dict['x_min']:crop_pos_dict['x_max']]
     return img_res
 
+
+# From SPD
+def estimateSimilarityUmeyama(SourceHom, TargetHom):
+    # Copy of original paper is at: http://web.stanford.edu/class/cs273/refs/umeyama.pdf
+    SourceCentroid = np.mean(SourceHom[:3, :], axis=1)
+    TargetCentroid = np.mean(TargetHom[:3, :], axis=1)
+    nPoints = SourceHom.shape[1]
+    CenteredSource = SourceHom[:3, :] - np.tile(SourceCentroid, (nPoints, 1)).transpose()
+    CenteredTarget = TargetHom[:3, :] - np.tile(TargetCentroid, (nPoints, 1)).transpose()
+    CovMatrix = np.matmul(CenteredTarget, np.transpose(CenteredSource)) / nPoints
+    if np.isnan(CovMatrix).any():
+        print('nPoints:', nPoints)
+        print(SourceHom.shape)
+        print(TargetHom.shape)
+        raise RuntimeError('There are NANs in the input.')
+
+    U, D, Vh = np.linalg.svd(CovMatrix, full_matrices=True)
+    d = (np.linalg.det(U) * np.linalg.det(Vh)) < 0.0
+    if d:
+        D[-1] = -D[-1]
+        U[:, -1] = -U[:, -1]
+    # rotation
+    Rotation = np.matmul(U, Vh)
+    # scale
+    varP = np.var(SourceHom[:3, :], axis=1).sum()
+    Scale = 1 / varP * np.sum(D)
+    # translation
+    Translation = TargetHom[:3, :].mean(axis=1) - SourceHom[:3, :].mean(axis=1).dot(Scale*Rotation.T)
+    # transformation matrix
+    OutTransform = np.identity(4)
+    OutTransform[:3, :3] = Scale * Rotation
+    OutTransform[:3, 3] = Translation
+
+    return Scale, Rotation, Translation, OutTransform
+
+
+# From SPD
+def estimateSimilarityTransform(source: np.array, target: np.array, verbose=False):
+    """ Add RANSAC algorithm to account for outliers.
+
+    """
+    assert source.shape[0] == target.shape[0], 'Source and Target must have same number of points.'
+    SourceHom = np.transpose(np.hstack([source, np.ones([source.shape[0], 1])]))
+    TargetHom = np.transpose(np.hstack([target, np.ones([target.shape[0], 1])]))
+    # Auto-parameter selection based on source heuristics
+    # Assume source is object model or gt nocs map, which is of high quality
+    SourceCentroid = np.mean(SourceHom[:3, :], axis=1)
+    nPoints = SourceHom.shape[1]
+    CenteredSource = SourceHom[:3, :] - np.tile(SourceCentroid, (nPoints, 1)).transpose()
+    SourceDiameter = 2 * np.amax(np.linalg.norm(CenteredSource, axis=0))
+    InlierT = SourceDiameter / 10.0  # 0.1 of source diameter
+    maxIter = 128
+    confidence = 0.99
+
+    if verbose:
+        print('Inlier threshold: ', InlierT)
+        print('Max number of iterations: ', maxIter)
+
+    BestInlierRatio = 0
+    BestInlierIdx = np.arange(nPoints)
+    for i in range(0, maxIter):
+        # Pick 5 random (but corresponding) points from source and target
+        RandIdx = np.random.randint(nPoints, size=5)
+        Scale, _, _, OutTransform = estimateSimilarityUmeyama(SourceHom[:, RandIdx], TargetHom[:, RandIdx])
+        PassThreshold = Scale * InlierT    # propagate inlier threshold to target scale
+        Diff = TargetHom - np.matmul(OutTransform, SourceHom)
+        ResidualVec = np.linalg.norm(Diff[:3, :], axis=0)
+        InlierIdx = np.where(ResidualVec < PassThreshold)[0]
+        nInliers = InlierIdx.shape[0]
+        InlierRatio = nInliers / nPoints
+        # update best hypothesis
+        if InlierRatio > BestInlierRatio:
+            BestInlierRatio = InlierRatio
+            BestInlierIdx = InlierIdx
+        if verbose:
+            print('Iteration: ', i)
+            print('Inlier ratio: ', BestInlierRatio)
+        # early break
+        if (1 - (1 - BestInlierRatio ** 5) ** i) > confidence:
+            break
+
+    if(BestInlierRatio < 0.1):
+        print('[ WARN ] - Something is wrong. Small BestInlierRatio: ', BestInlierRatio)
+        return None, None, None, None
+
+    SourceInliersHom = SourceHom[:, BestInlierIdx]
+    TargetInliersHom = TargetHom[:, BestInlierIdx]
+    Scale, Rotation, Translation, OutTransform = estimateSimilarityUmeyama(SourceInliersHom, TargetInliersHom)
+
+    if verbose:
+        print('BestInlierRatio:', BestInlierRatio)
+        print('Rotation:\n', Rotation)
+        print('Translation:\n', Translation)
+        print('Scale:', Scale)
+
+    return Scale, Rotation, Translation, OutTransform
+
+# From CAPTRA
+EPS = 1e-6
+
+
+def rotate_pts_batch(source, target):  # src, tgt [H, N, 3]
+    M = np.matmul(target.swapaxes(-1, -2), source)  # [..., 3, N] * [..., N, 3] = [..., 3, 3]
+    U, D, Vh = np.linalg.svd(M, full_matrices=True)
+    d = np.linalg.det(np.matmul(U, Vh))
+    mid = np.zeros_like(U)
+    mid[..., 0, 0] = 1.
+    mid[..., 1, 1] = 1.
+    mid[..., 2, 2] = d
+    R = np.matmul(np.matmul(U, mid), Vh)
+
+    return R
+
+
+def scale_pts_batch(source, target):  # [H, N, 3]
+    scale = (np.sum(source * target, axis=(-1, -2)) /
+             (np.sum(source * source, axis=(-1, -2)) + EPS))
+    return scale
+
+
+def translate_pts_batch(source, target):   # [H, 3, N]
+    return np.mean((target - source), axis=-1, keepdims=True)  # [H, 3, 1]
+
+
+def transform_pts_batch(source, target):  # src, tgt: [H, N, 3]
+    source_centered = source - np.mean(source, -2, keepdims=True)
+    target_centered = target - np.mean(target, -2, keepdims=True)
+    rotation = rotate_pts_batch(source_centered, target_centered)
+
+    scale = scale_pts_batch(np.matmul(source_centered,  # [H, N, 3]
+                                      rotation.swapaxes(-1, -2)),  # [H, 3, 3]
+                            target_centered)
+
+    translation = translate_pts_batch(scale.reshape(scale.shape + (1, 1)) * np.matmul(rotation, source.swapaxes(-1, -2)),
+                                      target.swapaxes(-1, -2))
+
+    return rotation, scale, translation  # [H, 3, 3], [H, 1], [H, 3, 1]
+
+
+def random_choice_noreplace(idx_range, n_sample, num_draw):
+    return np.argpartition(np.random.rand(num_draw, idx_range),
+                           n_sample - 1,
+                           axis=-1)[:, :n_sample]
+
+
+# (coord_pts, pts)
+def pose_fit(source, target, num_hyps=64, inlier_th=1e-3):  # src, tgt: [N, 3]
+    if len(source) < 3:
+        print('len source < 3!', len(source))
+
+    sample_idx = random_choice_noreplace(len(source), 3, num_hyps)  # [H, 3]
+
+    src_sampled = source[sample_idx]
+    tgt_sampled = target[sample_idx]
+    rotation, scale, translation = transform_pts_batch(src_sampled, tgt_sampled)
+
+    err = (target.reshape(1, -1, 3, 1)  # [N, 3] -> [1, N, 3, 1]
+           - np.expand_dims(scale, (1, 2, 3))  # [H] -> [H, 1, 1, 1]
+           * np.matmul(np.expand_dims(rotation, 1), source.reshape(1, -1, 3, 1))  # [H, N, 3, 3], [1, N, 3, 1]
+           - np.expand_dims(translation, 1))  # [H, (1), 3, 1]
+    err = err.reshape(err.shape[:-1])  # [H, N, 3]
+    err = np.sqrt(np.sum(err ** 2, axis=-1))  # [H, N]
+    score = (err < inlier_th).sum(axis=-1)  # [H]
+    # print('err', err.mean(axis=1), err.min(axis=1), err.max(axis=1))
+    # print('score out of', len(source), score)
+    best_idx = np.argmax(score)
+
+    inlier_idx = np.where(err[best_idx] < inlier_th)[0]
+    if len(inlier_idx) < 3:
+        return None
+    src_sampled = source[inlier_idx]
+    tgt_sampled = target[inlier_idx]
+    rotation, scale, translation = transform_pts_batch(src_sampled, tgt_sampled)
+
+    """
+    posed_source = scale.reshape(1, 1, 1) * np.matmul(rotation.reshape(1, 3, 3), source.reshape(-1, 3, 1)) + translation.reshape(-1, 3, 1)
+    posed_source = posed_source.reshape(-1, 3)
+
+    mean = posed_source.mean(axis=0)
+    plot3d_pts([[(posed_source - mean) / 200.0],
+                [(target - mean) / 200.0],
+                [(posed_source - mean) / 200.0, (target - mean) / 200.0]
+                ])
+    plot3d_pts([[posed_source - mean],
+                [target - mean],
+                [posed_source - mean, target - mean]
+                ], limits=[[[-0.2, 0.2] for __ in range(3)] for _ in range(3)])
+    """
+    model = {'rotation': rotation, 'scale': scale, 'translation': translation}  # [B, P]
+
+    return model

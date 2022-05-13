@@ -72,7 +72,7 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
         color = cv2.imread(depth_path.replace('depth', 'color'))
         mask = cv2.imread(depth_path.replace('depth', 'mask'))[:, :, 2]
         mask = (mask == inst_num)
-        full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask, 'color':color}
+        full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask, 'color': color}
         # color
     else:
         # 不同于CAPTRA, CAMERA数据集也需要深度图和mask
@@ -369,17 +369,23 @@ class RealSeqDataset(Dataset):
         print('seq start', self.seq_start)
         self.subseq_len = subseq_len
         self.len = 0
-        self.idx_ref = np.array([])
+        self.idx_ref = []
         seq_start_idx_len = len(self.seq_start) - 1  # seq_start序列的长度
         for i in range(0, seq_start_idx_len-1):
-            # 某一个scene的序列长度
-            seq_len = self.seq_start[i+1]-self.seq_start[i]
-            if subseq_len >= seq_len:
+            scene_seq_len = self.seq_start[i+1]-self.seq_start[i]  # 某一个scene的序列长度
+            if subseq_len == -1:
+                # 当测试的时候需要完整的序列
+                # 该scene的帧全部添加
+                new_idx_ref = np.arange(0, scene_seq_len) + self.seq_start[i]
+                self.idx_ref.append(new_idx_ref)
+            elif subseq_len >= scene_seq_len:
+                # 防止返回的数据长度不一致无法组成batch
                 continue
             else:
-                idx_ref_tmp = np.arange(0, seq_len-subseq_len+1) + self.seq_start[i]
-            self.idx_ref = np.concatenate([self.idx_ref, idx_ref_tmp], axis=0).astype(np.int16)
-        self.len = self.idx_ref.shape[0]
+                for j in range(0, scene_seq_len-subseq_len+1):
+                    new_idx_ref = np.arange(0, subseq_len) + self.seq_start[i] + j
+                    self.idx_ref.append(new_idx_ref)
+        self.len = len(self.idx_ref)
 
     def __len__(self):
         return self.len
@@ -408,8 +414,9 @@ class RealSeqDataset(Dataset):
 
     def __getitem__(self, idx):
         subseq_data = []
-        for i in range(self.subseq_len):
-            data = deepcopy(self.retrieve_single_frame(self.idx_ref[idx+i]))
+        now_idx_ref = self.idx_ref[idx]
+        for idx in now_idx_ref:
+            data = deepcopy(self.retrieve_single_frame(idx))
             data = shuffle(data)
             subseq_data.append(data)
         ret = []
@@ -419,6 +426,7 @@ class RealSeqDataset(Dataset):
             # 增加了data['meta']['points_mean']
             # 可能对旋转是有必要的？
             data = subtract_mean(data)
+            # 存疑
             ret.append(data)
         return ret
 

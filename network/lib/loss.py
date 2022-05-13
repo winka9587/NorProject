@@ -87,6 +87,11 @@ class Loss(nn.Module):
             points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2 = frame_pair
             frame_total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss = \
                 self.get_total_loss_2_frame(points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2)
+            print("corr_loss_1:    {0},\n"
+                  "                {1}\n"
+                  "entropy_loss:   {2},\n"
+                  "                {3}\n"
+                  "reciprocal_loss:{4}\n".format(corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss))
             total_loss += 1.0 * frame_total_loss
         return total_loss
 

@@ -10,7 +10,7 @@ import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 print(os.path.dirname(os.path.abspath(__file__)))
 from network.only_sift import SIFT_Track
-
+from lib.utils import pose_fit
 
 parser = argparse.ArgumentParser()
 # lr_policy
@@ -72,7 +72,7 @@ def train(opt):
     shuffle = False
     num_workers = 0
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
-    test_dataloader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False, num_workers=num_workers)
+    test_dataloader = DataLoader(val_dataset, batch_size=1, shuffle=False, num_workers=num_workers)
 
     emb_dim = 512
     num_points = 1024
@@ -87,6 +87,9 @@ def train(opt):
     for epoch in range(opt.start_epoch, opt.max_epoch + 1):
         print(f'epoch:{epoch}')
         for i, data in enumerate(train_dataloader):
+            # 测试eval用
+            if i == 0:
+                break
             print(f'data index {i}')
             trainer.set_data(data)
             trainer.update()
@@ -109,11 +112,32 @@ def train(opt):
             # 评估位姿
             # points1和points2计算位姿
             total_loss = 0.0
-            for frame_pair in points_assign_mat_list:
+            for frame_pair_idx in len(points_assign_mat_list):
+                frame_pair = points_assign_mat_list[frame_pair_idx]
                 points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2 = frame_pair
-                frame_total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2 = \
-                    self.get_total_loss_2_frame(points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2)
-                total_loss += 1.0 * frame_total_loss
+                assigned_points2 = torch.bmm(assign_matrix_bs_2, points_bs_1)
+                # assigned_points2与point_bs_2计算位姿
+                for j in range(len(assigned_points2)):
+                    assigned_points = assigned_points2[j].cpu().numpy()
+                    points_2 = points_bs_2[j].cpu().numpy()
+                    predicted_pose12 = pose_fit(assigned_points, points_2)  # 模型预测的位姿
+                    # 获得前后两帧的sRT
+                    # meta中的位姿nocs2camera是 get_gt_poses.py中的函数
+                    # get_image_pose(num_instances, mask, coord, depth, intrinsics):
+                    # 通过函数 pose = pose_fit(coord_pts, pts)获得的
+                    sRT1 = data[frame_pair]['meta']['nocs2camera'][0]
+                    sRT2 = data[frame_pair+1]['meta']['nocs2camera'][0]
+                    R12 = torch.mm(torch.inverse(sRT1['rotation'].squeeze(0)), sRT2['rotation'].squeeze(0))
+
+                    # 按理说 R12 应该与 gt meta中的points pose_fit得到的旋转一样
+                    gt_points1 = data[frame_pair]['points'].cpu().squeeze(0).transpose(0, 1).numpy()
+                    gt_points2 = data[frame_pair+1]['points'].cpu().squeeze(0).transpose(0, 1).numpy()
+                    gt_pose12 = pose_fit(gt_points1, gt_points2)
+
+
+                # 与gt进行比较
+                print(pose)
+                print(data)
             return total_loss
 
         # 保存模型
