@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from part_dof_utils import part_model_batch_to_part, eval_part_full, add_noise_to_part_dof, \
     compute_parts_delta_pose
-from utils import cvt_torch, Timer, add_border_bool
+from utils import cvt_torch, Timer, add_border_bool_by_crop_pos
 from network.lib.utils import crop_img
 import numpy as np
 from extract_2D_kp import extract_sift_kp_from_RGB, sift_match
@@ -46,40 +46,41 @@ class ConfigRandLA:
 #     'resnet34': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=512, deep_features_size=256, backend='resnet34'),
 #     'resnet50': lambda: PSPNet(sizes=(1, 2, 3, 6), psp_size=2048, deep_features_size=1024, backend='resnet50'),
 # }
-def get_scheduler(optimizer, cfg, it=-1):
+def get_scheduler(optimizer, opt, it=-1):
     scheduler = None
     if optimizer is None:
         return scheduler
-    if 'lr_policy' not in cfg or cfg['lr_policy'] == 'constant':
+    if opt.lr_policy is None or opt.lr_policy == 'constant':
         scheduler = None  # constant scheduler
-    elif cfg['lr_policy'] == 'step':
+    elif opt.lr_policy == 'step':
         scheduler = lr_scheduler.StepLR(optimizer,
-                                        step_size=cfg['lr_step_size'],
-                                        gamma=cfg['lr_gamma'],
+                                        step_size=opt.lr_step_size,
+                                        gamma=opt.lr_gamma,
                                         last_epoch=it)
     else:
-        assert 0, '{} not implemented'.format(cfg['lr_policy'])
+        assert 0, '{} not implemented'.format(opt.lr_policy)
     return scheduler
 
 
-def get_optimizer(params, cfg):
+def get_optimizer(params, opt):
     if len(params) == 0:
         return None
-    if cfg['optimizer'] == 'Adam':
+    if opt.optimizer == 'Adam':
         optimizer = torch.optim.Adam(
-            params, lr=cfg['learning_rate'],
+            params, lr=opt.learning_rate,
             betas=(0.9, 0.999), eps=1e-08,
-            weight_decay=cfg['weight_decay'])
-    elif cfg['optimizer'] == 'SGD':
+            weight_decay=opt.weight_decay)
+    elif opt.optimizer == 'SGD':
         optimizer = torch.optim.SGD(
-            params, lr=cfg['learning_rate'],
+            params, lr=opt.learning_rate,
             momentum=0.9)
     else:
-        assert 0, "Unsupported optimizer type {}".format(cfg['optimizer'])
+        assert 0, "Unsupported optimizer type {}".format(opt.optimizer)
     return optimizer
 
+
 class SIFT_Track(nn.Module):
-    def __init__(self, device, real, subseq_len=2, mode='train'):
+    def __init__(self, device, real, subseq_len=2, mode='train', opt=None):
         super(SIFT_Track, self).__init__()
         # self.fc1 = nn.Linear(emb_dim, 512)
         # self.fc2 = nn.Linear(512, 1024)
@@ -153,9 +154,9 @@ class SIFT_Track(nn.Module):
         # ])
         # self.ds_sr = [4, 8, 8, 8]
 
-        self.optimizer = get_optimizer([p for p in self.model.parameters() if p.requires_grad], cfg)
-        self.scheduler = get_scheduler(self.optimizer, cfg)
-
+        self.optimizer = torch.optim.Adam(self.parameters(), lr=opt.learning_rate)
+        self.epoch = 0
+        self.loss_dict = {}
 
 
     # frame={dict:4}
@@ -232,19 +233,20 @@ class SIFT_Track(nn.Module):
     # bs x n_pts x nv
     # (10, 1024, 1024)
     def get_assgin_matrix(self, inst_local, inst_global, cat_global):
-        assign_feat = torch.cat((inst_local, inst_global.repeat(1, 1, self.n_pts), cat_global.repeat(1, 1, self.n_pts)),
+        assign_feat_bs = torch.cat((inst_local, inst_global.repeat(1, 1, self.n_pts), cat_global.repeat(1, 1, self.n_pts)),
                                 dim=1)  # bs x 2176 x n_pts
-        assign_mat = self.assignment(assign_feat)  # bs x 1024 x 1024  (bs, n_pts_2, npts_1)
+        assign_mat_bs = self.assignment(assign_feat_bs)  # bs x 1024 x 1024  (bs, n_pts_2, npts_1)
         # nv原本是prior点的数量,但这里因为用的是实例点云(只是不同帧而已),所以与self.n_pts相同
         nv = self.n_pts
-        assign_mat = assign_mat.view(-1, nv, self.n_pts).contiguous()  # bs, nv, n_pts -> bs, nv, n_pts
+        assign_mat_bs = assign_mat_bs.view(-1, nv, self.n_pts).contiguous()  # bs, nv, n_pts -> bs, nv, n_pts
 
         # assign_mat = torch.index_select(assign_mat, 0, index)  # 删除softmax这一部分
-        assign_mat = assign_mat.permute(0, 2, 1).contiguous()  # bs x n_pts x nv
-        return assign_mat
+        assign_mat_bs = assign_mat_bs.permute(0, 2, 1).contiguous()  # bs x n_pts x nv
+        return assign_mat_bs
 
     # 有mask_add_from_last_frame说明是第二帧，需要使用前一帧提供的mask
     def extract_3D_kp(self, frame, mask_bs):
+        timer = Timer(True)
         # rgb                彩色图像               [bs, 3, h, w]
         # dpt_nrm            图像:xyz+normal       [bs, 6, h, w], 3c xyz in meter + 3c normal map
         # cld_rgb_nrm点云:    xyz+rgb+normal      [bs, 9, npts]
@@ -285,13 +287,15 @@ class SIFT_Track(nn.Module):
         choose_bs = choose_bs.cuda()
         # mask_bs_choose = mask_bs_choose.cuda()
 
+        timer.tick('extract idx from mask')
+
         # 遍历batch
         bs = len(depth_bs)
         mask_bs_next = mask_bs.clone()
         color_bs_zero_pad = color_bs.clone()
-
         points_feat_bs = torch.tensor([]).cuda()  # 提取的几何特征
-
+        points_bs = torch.tensor([]).cuda()  # (bs, 1024, 3)
+        timer_1 = Timer(True)
         for batch_idx in range(bs):
             color = color_bs[batch_idx]
             depth = depth_bs[batch_idx]
@@ -317,9 +321,11 @@ class SIFT_Track(nn.Module):
             pt2 = pt2.numpy()                               # z
             pt0 = (xmap_masked - self.cam_cx) * pt2 / self.cam_fx     # x
             pt1 = (ymap_masked - self.cam_cy) * pt2 / self.cam_fy     # y
-            points = np.concatenate((pt0, pt1, pt2), axis=1)
-            points = torch.from_numpy(np.transpose(points, (2, 0, 1))).cuda()  # points (1, 1024, 3) -> (1, 1024, 3)
-
+            points = np.concatenate((pt0, pt1, pt2), axis=1)  # xyz
+            points = torch.from_numpy(np.transpose(points, (2, 0, 1))).cuda()  # points (1024, 3, 1) -> (1, 1024, 3)
+            points = points.type(torch.float32)
+            points_bs = torch.cat((points_bs, points), 0)
+            timer_1.tick('single batch | backproject')
             # 测试读取rgb
             # rgb_show = torch.zeros(color.shape, dtype=torch.uint8)
             # rgb_show[ymap_masked, xmap_masked, 0] = color[ymap_masked, xmap_masked, 0]
@@ -332,6 +338,7 @@ class SIFT_Track(nn.Module):
             points_rgb = points_rgb.squeeze(1).transpose(1, 0).cuda()  # points_rgb (1024, 1, 3) -> (1, 1024, 3)
             points_nrm = nrm[ymap_masked, xmap_masked]
             points_nrm = points_nrm.squeeze(1).transpose(1, 0).cuda()  # points_nrm (1024, 1, 3) -> (1, 1024, 3)
+            timer_1.tick('single batch | extract color and nrm feature')
             # 如果要增加对噪声点的过滤，需要重新采样(重新计算choose)，或者在计算choose之前就进行过滤
             # viz_multi_points_diff_color(f'pts:{batch_idx}', [points], [np.array([[1, 0, 0]])])
             # 拼接三个不同的特征
@@ -339,25 +346,29 @@ class SIFT_Track(nn.Module):
             #  -> (1, 1024, 3) ->  -> (1, 1024, 9)
             pts_9d = torch.concat([points, points_rgb, points_nrm], dim=2)
             points_feat_bs = torch.cat((points_feat_bs, pts_9d), 0)
+            timer_1.tick('single batch | concat 3 feat')
             # 2.提取颜色特征
             # 通过mask获得crop_pos
             def get_crop_pos_by_mask(mask):
                 crop_idx = torch.where(mask)
-                x_max = max(crop_idx[1]).item()
-                x_min = min(crop_idx[1]).item()
-                y_max = max(crop_idx[0]).item()
-                y_min = min(crop_idx[0]).item()
+                x_max = torch.max(crop_idx[1]).item()
+                x_min = torch.min(crop_idx[1]).item()
+                y_max = torch.max(crop_idx[0]).item()
+                y_min = torch.min(crop_idx[0]).item()
                 crop_pos_tmp = {'x_min': x_min, 'x_max': x_max, 'y_min': y_min, 'y_max': y_max}
                 return crop_pos_tmp
 
             def zero_padding_by_mask(img, mask):
+                t2 = Timer(True)
                 crop_pos = get_crop_pos_by_mask(mask)
+                t2.tick('--get crop by mask')
                 img_zero_pad = torch.zeros(img.shape, dtype=img.dtype)
                 # 创建idx[0] y
                 # 创建indx[1] x
 
                 idx1 = torch.arange(crop_pos['x_min'], crop_pos['x_max'])
                 idx0 = torch.full(idx1.shape, crop_pos['y_min'])
+                t2.tick('--fill zero')
                 mask_crop_idx0 = idx0
                 mask_crop_idx1 = idx1
                 for y in range(1, crop_pos['y_max']-crop_pos['y_min']):
@@ -366,25 +377,28 @@ class SIFT_Track(nn.Module):
                     mask_crop_idx1 = torch.concat((mask_crop_idx1, idx1))
                 mask_crop_idx = (mask_crop_idx0, mask_crop_idx1)
                 img_zero_pad[mask_crop_idx] = img[mask_crop_idx]
+                t2.tick('--map mask value to img')
                 # 可视化零填充后的mask,bbox之外应该都是黑色
                 # cv2.imshow(f'zero:{batch_idx}', img_zero_pad.numpy())
                 # cv2.waitKey(0)
-                return img_zero_pad
+                return img_zero_pad, crop_pos
 
             # 根据mask,对周围进行零填充
-            color_zero_pad = zero_padding_by_mask(color, mask_bs[batch_idx])
+            color_zero_pad, crop_pos = zero_padding_by_mask(color, mask_bs[batch_idx])
             color_bs_zero_pad[batch_idx] = color_zero_pad
+            timer_1.tick('single batch | zero_padding')
             # 为下一帧计算mask_add
-            mask_bs_next[batch_idx] = add_border_bool(mask, kernel_size=10)
-
+            mask_bs_next[batch_idx] = add_border_bool_by_crop_pos(mask, crop_pos, kernel_size=10)
+            timer_1.tick('single batch | add border')
+        timer.tick('go through batch and backproject pcd')
         # 提取几何特征
         points_feat_bs = points_feat_bs.type(torch.float32)  # points_feat_bs (bs, 1024, 3)
         points_feat = self.instance_geometry(points_feat_bs[:, :, :3])  # points_feat (bs, 64, 1024)
+        timer.tick('get geometry feature')
 
         # 图像输入PSP-Net, 提取RGB特征
         color_bs_zero_pad = color_bs_zero_pad.cuda()
         color_bs_zero_pad = color_bs_zero_pad.type(torch.float32)
-
         # SGPA中,这里的图像已经被裁剪为192x192了
         # 之后可以测试一下
         # 这里绝对是可以继续优化的，因为后面choose会将没用的筛选掉，所以这里会计算很多没用CNN
@@ -392,6 +406,7 @@ class SIFT_Track(nn.Module):
         out_img = self.psp(color_bs_zero_pad.permute(0, 3, 1, 2))
         di = out_img.size()[1]  # 特征维度 32
         emb = out_img.view(bs, di, -1)  # 将每张图像的特征变成每个像素点的
+        timer.tick('get RGB feature CNN')
 
         # 对特征进行采样,采样n_pts个点
         # (bs, n_pts) -> (bs, n_dim=32, n_pts)
@@ -402,17 +417,18 @@ class SIFT_Track(nn.Module):
         # emb (10, 64, 1024)
         # 1024个点的颜色特征，每个点的特征有64维
         emb = self.instance_color(emb)
+        timer.tick('get RGB feature sampling')
 
         # 至此已经得到了(bs, 64, 1024)的几何特征与(bs, 64, 1024)的颜色特征
         # 将两者拼接得到instance local特征
         inst_local = torch.cat((points_feat, emb), dim=1)   # bs x 128 x 1024
         inst_global = self.instance_global(inst_local)      # bs x 1024 x 1
-
+        timer.tick('get RGB feature concat')
         # 还需要做分割mask_for_next
         #
         # kps_3d = None
         # mask_bs_next 给下一帧使用的mask
-        return inst_local, inst_global, mask_bs_next
+        return inst_local, inst_global, mask_bs_next, points_bs
 
     def forward(self):
         # 传入的data分为两部分, 第一帧和后续帧
@@ -441,48 +457,51 @@ class SIFT_Track(nn.Module):
         use_ = False
         # 暂时不使用的代码
         if use_:
+            pass
             # sift
-            for i in range(1, len(self.feed_dict)):
-                last_frame = self.feed_dict[i - 1]
-                next_frame = self.feed_dict[1]
-                last_colors = last_frame['meta']['pre_fetched']['color']
-                last_nrms = last_frame['meta']['pre_fetched']['nrm']
-                next_colors = next_frame['meta']['pre_fetched']['color']
-                next_nrms = next_frame['meta']['pre_fetched']['nrm']
-                # sift匹配
-                for j in range(batch_size):
-                    last_crop_color = crop_img(last_colors[j], crop_pos[j])
-                    next_crop_color = crop_img(next_colors[j], crop_pos[j])
-                    timer = Timer(True)
-                    color_sift_1, kp_xys_1, des_1 = extract_sift_kp_from_RGB(last_crop_color)
-                    color_sift_2, kp_xys_2, des_2 = extract_sift_kp_from_RGB(next_crop_color)
-                    timer.tick('sift feature extract')
-                    matches = sift_match(des_1, des_2, self.matcher)
-                    timer.tick('sift match ')
-                    # 可以用RANSAC过滤特征点
-                    # https://blog.csdn.net/sinat_41686583/article/details/115186277
-
-                    # 取对应的normal map
-                    last_crop_nrm = crop_img(last_nrms[j], crop_pos[j])
-                    next_crop_nrm = crop_img(next_nrms[j], crop_pos[j])
-                    # 可视化
-                    # cv2.imshow('color_sift_1', color_sift_1)
-                    # cv2.waitKey(0)
-                    # cv2.imshow('color_sift_2', color_sift_2)
-                    # cv2.waitKey(0)
-                    #
-                    # cv2.imshow('nrm_1', norm2bgr(last_crop_nrm))
-                    # cv2.waitKey(0)
-                    # cv2.imshow('nrm_2', norm2bgr(next_crop_nrm))
-                    # cv2.waitKey(0)
-
-                    # 提取3D点并进行匹配
-                    # 提取xyz+RGB+normal特征进行匹配
+            # for i in range(1, len(self.feed_dict)):
+            #     last_frame = self.feed_dict[i - 1]
+            #     next_frame = self.feed_dict[1]
+            #     last_colors = last_frame['meta']['pre_fetched']['color']
+            #     last_nrms = last_frame['meta']['pre_fetched']['nrm']
+            #     next_colors = next_frame['meta']['pre_fetched']['color']
+            #     next_nrms = next_frame['meta']['pre_fetched']['nrm']
+            #     # sift匹配
+            #     for j in range(batch_size):
+            #         last_crop_color = crop_img(last_colors[j], crop_pos[j])
+            #         next_crop_color = crop_img(next_colors[j], crop_pos[j])
+            #         timer = Timer(True)
+            #         color_sift_1, kp_xys_1, des_1 = extract_sift_kp_from_RGB(last_crop_color)
+            #         color_sift_2, kp_xys_2, des_2 = extract_sift_kp_from_RGB(next_crop_color)
+            #         timer.tick('sift feature extract')
+            #         matches = sift_match(des_1, des_2, self.matcher)
+            #         timer.tick('sift match ')
+            #         # 可以用RANSAC过滤特征点
+            #         # https://blog.csdn.net/sinat_41686583/article/details/115186277
+            #
+            #         # 取对应的normal map
+            #         last_crop_nrm = crop_img(last_nrms[j], crop_pos[j])
+            #         next_crop_nrm = crop_img(next_nrms[j], crop_pos[j])
+            #         # 可视化
+            #         # cv2.imshow('color_sift_1', color_sift_1)
+            #         # cv2.waitKey(0)
+            #         # cv2.imshow('color_sift_2', color_sift_2)
+            #         # cv2.waitKey(0)
+            #         #
+            #         # cv2.imshow('nrm_1', norm2bgr(last_crop_nrm))
+            #         # cv2.waitKey(0)
+            #         # cv2.imshow('nrm_2', norm2bgr(next_crop_nrm))
+            #         # cv2.waitKey(0)
+            #
+            #         # 提取3D点并进行匹配
+            #         # 提取xyz+RGB+normal特征进行匹配
 
 
         # try FFB6D extract 3D kp
         mask_last_frame = self.feed_dict[0]['meta']['pre_fetched']['mask']
         crop_pos_last_frame = init_crop_pos   # 记录每张图像的四个裁剪坐标
+
+        points_assign_mat = []
         # 第i帧
         for i in range(1, len(self.feed_dict)):
             last_frame = self.feed_dict[i - 1]
@@ -493,36 +512,36 @@ class SIFT_Track(nn.Module):
             next_nrms = next_frame['meta']['pre_fetched']['nrm']
             # 提取两帧的3D关键点
             # 提取第一帧的关键点
-            inst_local_1, inst_global_1, mask_bs_next = self.extract_3D_kp(last_frame, mask_last_frame)
-            inst_local_2, inst_global_2, _ = self.extract_3D_kp(next_frame, mask_bs_next)
+            print('extracting feature 1  ...')
+            timer_extract_feat = Timer(True)
+            inst_local_1, inst_global_1, mask_bs_next, points_bs_1 = self.extract_3D_kp(last_frame, mask_last_frame)
+            timer_extract_feat.tick('extract feature 1 end')
+
+            print('extracting feature 2  ...')
+            inst_local_2, inst_global_2, _, points_bs_2 = self.extract_3D_kp(next_frame, mask_bs_next)
+            timer_extract_feat.tick('extract feature 2 end')
 
             # 参考SGPA计算对应矩阵A
             # 1 -> 2
             # pts1 = A1*pts2
-            assign_matrix_1 = self.get_assgin_matrix(inst_local_1, inst_global_1, inst_global_2)
-
+            assign_matrix_bs_1 = self.get_assgin_matrix(inst_local_1, inst_global_1, inst_global_2)
+            timer_extract_feat.tick('get_assgin_matrix 1 end')
             # 2 -> 1
             # pts2 = A2*pts1
-            assign_matrix_2 = self.get_assgin_matrix(inst_local_2, inst_global_2, inst_global_1)
+            assign_matrix_bs_2 = self.get_assgin_matrix(inst_local_2, inst_global_2, inst_global_1)
+            timer_extract_feat.tick('get_assgin_matrix 2 end')
 
-            return assign_matrix_1, assign_matrix_2
-            # if i != len(self.feed_dict):
-            #     # 对于不同大小crop CNN的处理
-            #     # 第一帧就使用addborder(但是对于add的部分是否要调整为0？)
-            #     # 第二帧用第一帧的addborder
-            #     # 计算出位姿后,重新计算mask
-            #     # 还有后续帧
-            #     # 将第一帧mask后的点云通过RT变换到第二帧,来为之后的帧提供mask
-            #     mask_last_frame = get_mask()
-
-
-
-
-
-
-
-
-
+            points_assign_mat.append((points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2))
+            # len(points_assign_mat)是帧的数量-1
+        return points_assign_mat
+        # if i != len(self.feed_dict):
+        #     # 对于不同大小crop CNN的处理
+        #     # 第一帧就使用addborder(但是对于add的部分是否要调整为0？)
+        #     # 第二帧用第一帧的addborder
+        #     # 计算出位姿后,重新计算mask
+        #     # 还有后续帧
+        #     # 将第一帧mask后的点云通过RT变换到第二帧,来为之后的帧提供mask
+        #     mask_last_frame = get_mask()
 
         # bs = embedding.size()[0]
         # out = F.relu(self.fc1(embedding))
@@ -533,24 +552,32 @@ class SIFT_Track(nn.Module):
 
 
     def set_data(self, data):
+        print('set_data ...')
         # 提取需要的数据,并转移到cpu,并使用新的字典来存储
         self.feed_dict = []
-        self.npcs_feed_dict = []
+        # self.npcs_feed_dict = []
         for i, frame in enumerate(data):
             if i == 0:
                 self.feed_dict.append(self.convert_init_frame_data(frame))
             else:
                 self.feed_dict.append(self.convert_subseq_frame_data(frame))
-            self.npcs_feed_dict.append(self.convert_subseq_frame_npcs_data(frame))
+            # self.npcs_feed_dict.append(self.convert_subseq_frame_npcs_data(frame))
+        print('set_data end')
 
     def update(self):
-        assign_matrix_1, assign_matrix_2 = self.forward()
+        print('forwarding ...')
+        points_assign_mat = self.forward()
+        print('forward end')
         # 计算loss
         if self.mode == 'train':
-            total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2 = self.criterion(assign_matrix_1, assign_matrix_2)
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+            print('computing loss')
+            loss = self.criterion(points_assign_mat)
+            print('compute loss end')
+            print(f'loss: {loss}')
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+            print('backward end')
         # 调用forward,并计算loss
         # self.forward(save=save)
         # if not no_eval:
@@ -558,4 +585,8 @@ class SIFT_Track(nn.Module):
         # else:
         #     self.loss_dict = {}
 
-
+    def test(self, data):
+        self.eval()
+        self.set_data(data)
+        points_assign_mat = self.forward()
+        return points_assign_mat

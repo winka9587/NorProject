@@ -48,7 +48,14 @@ class Loss(nn.Module):
         entropy_loss = self.entropy_wt * entropy_loss
         return entropy_loss
 
-    def forward(self, assign_mat_1, points_1, assign_mat_2, points_2):
+    def get_cos_sim_loss(self, mat1, mat2):
+        assign_matmul = torch.bmm(mat1, mat2)
+        eye_bs = torch.eye(assign_matmul.shape[1]).unsqueeze(0).repeat(len(assign_matmul), 0, 0)
+        # 余弦相似性,如果两个矩阵完全一致,相似性的值为1
+        cos_sim_loss = 1 - F.cosine_similarity(torch.flatten(mat1, 1), torch.flatten(mat2, 1))
+        return cos_sim_loss.mean().item()
+
+    def get_total_loss_2_frame(self, points_1,  points_2, assign_mat_1, assign_mat_2):
         # def forward(self, assign_mat, deltas, prior, nocs, model):
         """
         Args:
@@ -63,22 +70,23 @@ class Loss(nn.Module):
         corr_loss_1 = self.get_corr_loss(soft_assign_1, points_1, points_2)
         corr_loss_2 = self.get_corr_loss(soft_assign_2, points_2, points_1)
 
-
         # 2. Regularization Loss
         # entropy loss to encourage peaked distribution
         entropy_loss_1 = self.get_RegularizationLoss(assign_mat_1, soft_assign_1)
         entropy_loss_2 = self.get_RegularizationLoss(assign_mat_2, soft_assign_2)
 
-        # 3. CD Loss
-        # cd-loss for instance reconstruction
-        # cd_loss, _, _ = self.chamferloss(inst_shape, model)
-        # cd_loss = self.cd_wt * cd_loss
+        # 3. A1和A2应当互逆
+        reciprocal_loss = self.get_cos_sim_loss(assign_mat_1, assign_mat_2)
 
-        # 4. Deform Loss
-        # L2 regularizations on deformation
-        # deform_loss = torch.norm(deltas, p=2, dim=2).mean()
-        # deform_loss = self.deform_wt * deform_loss
-        # total loss
-        # total_loss = corr_loss + entropy_loss + cd_loss + deform_loss
-        total_loss = corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2
-        return total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2
+        total_loss = corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss
+        return total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss
+
+    def forward(self, points_assign_mat_list):
+        total_loss = 0.0
+        for frame_pair in points_assign_mat_list:
+            points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2 = frame_pair
+            frame_total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss = \
+                self.get_total_loss_2_frame(points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2)
+            total_loss += 1.0 * frame_total_loss
+        return total_loss
+

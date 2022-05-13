@@ -126,12 +126,16 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
     # 遇到一个问题，就是normalspeed在计算时需要内参，其内部是做了反投影或类似的事情，但因为是封装好的，所以没法修改成处理某一
     # Real_intrinsics = np.array([[591.0125, 0, 322.525], [0, 590.16775, 244.11084], [0, 0, 1]])
     # CAMERA_intrinsics = np.array([[577.5, 0, 319.5], [0., 577.5, 239.5], [0., 0., 1.]])
-    fx = 577.5
-    fy = 577.5
+    if 'real' in mode:
+        fx = 591.0125
+        fy = 590.16775
+    else:
+        fx = 577.5
+        fy = 577.5
 
-    k_size = 5
+    k_size = 1
     distance_threshold = 2000
-    difference_threshold = 20
+    difference_threshold = 10  # 周围的点深度距离超过10mm则不考虑
     point_into_surface = False
 
     # color = np.load("examplePicture/color.npy")
@@ -361,7 +365,7 @@ class RealSeqDataset(Dataset):
         self.dataset = NOCSDataset(dataset_path, result_path, obj_category, mode, num_expr,
                                               num_points=num_points, radius=radius, bad_ins=bad_ins,
                                               perturb_cfg=perturb_cfg, device=device, opt=opt)
-        self.seq_start = get_seq_file_list_index(self.dataset.file_list)
+        self.seq_start = get_seq_file_list_index(self.dataset.file_list)  # 根据文件名,提取各个子序列的开始下标
         print('seq start', self.seq_start)
         self.subseq_len = subseq_len
         self.len = 0
@@ -370,8 +374,10 @@ class RealSeqDataset(Dataset):
         for i in range(0, seq_start_idx_len-1):
             # 某一个scene的序列长度
             seq_len = self.seq_start[i+1]-self.seq_start[i]
-            assert subseq_len < seq_len
-            idx_ref_tmp = np.arange(0, seq_len-subseq_len+1) + self.seq_start[i]
+            if subseq_len >= seq_len:
+                continue
+            else:
+                idx_ref_tmp = np.arange(0, seq_len-subseq_len+1) + self.seq_start[i]
             self.idx_ref = np.concatenate([self.idx_ref, idx_ref_tmp], axis=0).astype(np.int16)
         self.len = self.idx_ref.shape[0]
 

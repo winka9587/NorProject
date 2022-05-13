@@ -66,6 +66,19 @@ def add_border_bool(mask, kernel_size=10):  # enlarge the region w/ 255
     return output
 
 
+def add_border_bool_by_crop_pos(mask, crop_pos, kernel_size=10):  # enlarge the region w/ 255
+    # print((255 - mask).sum())
+    if isinstance(mask, torch.Tensor):
+        output = mask.clone()
+    else:
+        output = mask.copy()
+    h, w = mask.shape
+    output[max(0, crop_pos['y_min'] - kernel_size): min(h, crop_pos['y_max'] + kernel_size),
+            max(0, crop_pos['x_min'] - kernel_size): min(w, crop_pos['x_max'] + kernel_size)] = True
+    # print((255 - output).sum())
+    return output
+
+
 def config():
     parser = argparse.ArgumentParser()
     parser.add_argument('--root_path', type=str, default=None, help='')
