@@ -93,7 +93,7 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
         color = cv2.imread(depth_path.replace('depth', 'color'))
         mask = cv2.imread(depth_path.replace('depth', 'mask'))[:, :, 2]
         mask = (mask == inst_num)
-        full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask, 'color':color}
+        full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask, 'color': color}
         # origin CAPTRA code
         # full_data['pre_fetched'] = {}
 
@@ -203,7 +203,7 @@ class NOCSDataset(Dataset):
         self.invalid_dict = {}      # 存储invalid的下标
         print('Successfully Initialized NOCSDataset ...')
 
-
+    # 生成存放npz文件路径的list并返回
     def collect_data(self):
         # ../data/nocs_data/splits/1/1_bottle_rot
         splits_path = pjoin(self.dataset_path, "splits", self.obj_category, self.num_expr)
@@ -367,6 +367,10 @@ class RealSeqDataset(Dataset):
                                               perturb_cfg=perturb_cfg, device=device, opt=opt)
         self.seq_start = get_seq_file_list_index(self.dataset.file_list)  # 根据文件名,提取各个子序列的开始下标
         print('seq start', self.seq_start)
+        # 即便测试也不能让序列无限长,不然会爆内存
+        # 之后再考虑如何测连续数据吧，可能得在修改一下getitem函数
+        if 'test' in mode:
+            subseq_len = 2
         self.subseq_len = subseq_len
         self.len = 0
         self.idx_ref = []
@@ -376,8 +380,10 @@ class RealSeqDataset(Dataset):
             if subseq_len == -1:
                 # 当测试的时候需要完整的序列
                 # 该scene的帧全部添加
+                pass
                 new_idx_ref = np.arange(0, scene_seq_len) + self.seq_start[i]
                 self.idx_ref.append(new_idx_ref)
+
             elif subseq_len >= scene_seq_len:
                 # 防止返回的数据长度不一致无法组成batch
                 continue

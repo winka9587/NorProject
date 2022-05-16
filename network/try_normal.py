@@ -11,7 +11,7 @@ import torch
 import sys
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 print(os.path.dirname(os.path.abspath(__file__)))
-from network.only_sift import SIFT_Track
+from network.viz_normal import SIFT_Track_normal_viz
 from lib.utils import pose_fit, render_points_diff_color
 
 parser = argparse.ArgumentParser()
@@ -25,22 +25,6 @@ parser.add_argument('--learning_rate', type=float, default=0.0001, help='initial
 parser.add_argument('--start_epoch', type=int, default=1, help='which epoch to start')
 parser.add_argument('--max_epoch', type=int, default=15, help='max number of epochs to train')
 parser.add_argument('--result_dir', type=str, default='results/Real', help='directory to save train results')
-
-# parser.add_argument('--dataset', type=str, default='CAMERA+Real', help='CAMERA or CAMERA+Real')
-# parser.add_argument('--data_dir', type=str, default='data', help='data directory')
-# parser.add_argument('--n_pts', type=int, default=1024, help='number of foreground points')
-# parser.add_argument('--n_cat', type=int, default=6, help='number of object categories')
-# parser.add_argument('--nv_prior', type=int, default=1024, help='number of vertices in shape priors')
-# parser.add_argument('--img_size', type=int, default=192, help='cropped image size')
-# parser.add_argument('--batch_size', type=int, default=24, help='batch size')
-# parser.add_argument('--num_workers', type=int, default=8, help='number of data loading workers')
-# parser.add_argument('--gpu', type=str, default='0,1', help='GPU to use')
-# parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
-# parser.add_argument('--start_epoch', type=int, default=1, help='which epoch to start')
-# parser.add_argument('--max_epoch', type=int, default=15, help='max number of epochs to train')
-# parser.add_argument('--resume_model', type=str, default='', help='resume from saved model')
-# parser.add_argument('--result_dir', type=str, default='results/real', help='directory to save train results')
-
 
 
 def train(opt):
@@ -81,7 +65,7 @@ def train(opt):
     resume_model = ''
     # resume_model = 'results/real/model_cat1_15.pth'
 
-    trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt)
+    trainer = SIFT_Track_normal_viz(device=device, real=('real' in mode), mode='train', opt=opt)
     # trainer = torch.nn.DataParallel(trainer, device_ids)
     trainer.cuda()
     if resume_model != '':
@@ -164,7 +148,8 @@ def train(opt):
 
 
                 # 与gt进行比较
-
+                print(pose)
+                print(data)
             return total_loss
 
         # 保存模型

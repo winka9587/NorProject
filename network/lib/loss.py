@@ -78,7 +78,7 @@ class Loss(nn.Module):
         # 3. A1和A2应当互逆
         reciprocal_loss = self.get_cos_sim_loss(assign_mat_1, assign_mat_2)
 
-        total_loss = corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss
+        total_loss = corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + 10.0*reciprocal_loss
         return total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss
 
     def forward(self, points_assign_mat_list):

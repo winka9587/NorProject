@@ -80,9 +80,9 @@ def get_optimizer(params, opt):
     return optimizer
 
 
-class SIFT_Track(nn.Module):
+class SIFT_Track_normal_viz(nn.Module):
     def __init__(self, device, real, subseq_len=2, mode='train', opt=None):
-        super(SIFT_Track, self).__init__()
+        super(SIFT_Track_normal_viz, self).__init__()
         # self.fc1 = nn.Linear(emb_dim, 512)
         # self.fc2 = nn.Linear(512, 1024)
         # self.fc3 = nn.Linear(1024, 3*n_pts)
@@ -324,34 +324,34 @@ class SIFT_Track(nn.Module):
             pt1 = (ymap_masked - self.cam_cy) * pt2 / self.cam_fy     # y
             points = np.concatenate((pt0, pt1, pt2), axis=1)  # xyz
 
-            # points_viz = points.copy()  # 测试反投影|(1)
+            points_viz = points.copy()  # 测试反投影|(1)
             points = torch.from_numpy(np.transpose(points, (2, 0, 1))).cuda()  # points (1024, 3, 1) -> (1, 1024, 3)
             points = points.type(torch.float32)
             points_bs = torch.cat((points_bs, points), 0)
             timer_1.tick('single batch | backproject')
 
-            # if self.mode == 'test':
-            #     # 测试反投影|(2)可视化color 和 mask
-            #     print('data from {}'.format(frame['meta']['ori_path']))
-            #     cv2.imshow('rgb', color.clone().cpu().numpy())
-            #     cv2.waitKey(0)
-            #     viz_mask_bool('viz_mask', mask)
-            #     # 测试反投影|(3)可视化裁剪的rgb
-            #     rgb_show = torch.zeros(color.shape, dtype=torch.uint8)
-            #     rgb_show[ymap_masked, xmap_masked, 0] = color[ymap_masked, xmap_masked, 0]
-            #     rgb_show[ymap_masked, xmap_masked, 1] = color[ymap_masked, xmap_masked, 1]
-            #     rgb_show[ymap_masked, xmap_masked, 2] = color[ymap_masked, xmap_masked, 2]
-            #     cv2.imshow('rgb', rgb_show.numpy())
-            #     cv2.waitKey(0)
-            #     # 测试反投影|(3)可视化反投影点云
-            #     points_viz = np.squeeze(np.transpose(points_viz, (2, 0, 1)), 0)
-            #     color_red = np.array([255, 0, 0])
-            #     color_green = np.array([0, 255, 0])
-            #     color_blue = np.array([0, 0, 255])
-            #     pts_colors = [color_red]
-            #     render_points_diff_color('test backproject', [points_viz],
-            #                              pts_colors, save_img=False,
-            #                              show_img=True)
+            if self.mode == 'test':
+                # 测试反投影|(2)可视化color 和 mask
+                print('data from {}'.format(frame['meta']['ori_path']))
+                cv2.imshow('rgb', color.clone().cpu().numpy())
+                cv2.waitKey(0)
+                viz_mask_bool('viz_mask', mask)
+                # 测试反投影|(3)可视化裁剪的rgb
+                rgb_show = torch.zeros(color.shape, dtype=torch.uint8)
+                rgb_show[ymap_masked, xmap_masked, 0] = color[ymap_masked, xmap_masked, 0]
+                rgb_show[ymap_masked, xmap_masked, 1] = color[ymap_masked, xmap_masked, 1]
+                rgb_show[ymap_masked, xmap_masked, 2] = color[ymap_masked, xmap_masked, 2]
+                cv2.imshow('rgb', rgb_show.numpy())
+                cv2.waitKey(0)
+                # 测试反投影|(3)可视化反投影点云
+                points_viz = np.squeeze(np.transpose(points_viz, (2, 0, 1)), 0)
+                color_red = np.array([255, 0, 0])
+                color_green = np.array([0, 255, 0])
+                color_blue = np.array([0, 0, 255])
+                pts_colors = [color_red]
+                render_points_diff_color('test backproject', [points_viz],
+                                         pts_colors, save_img=False,
+                                         show_img=True)
 
             points_rgb = color[ymap_masked, xmap_masked]
             points_rgb = points_rgb.squeeze(1).transpose(1, 0).cuda()  # points_rgb (1024, 1, 3) -> (1, 1024, 3)

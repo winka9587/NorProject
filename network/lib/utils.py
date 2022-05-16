@@ -992,7 +992,7 @@ def random_choice_noreplace(idx_range, n_sample, num_draw):
 
 
 # (coord_pts, pts)
-def pose_fit(source, target, num_hyps=64, inlier_th=1e-3):  # src, tgt: [N, 3]
+def pose_fit(source, target, num_hyps=1024, inlier_th=1e-3):  # src, tgt: [N, 3]
     if len(source) < 3:
         print('len source < 3!', len(source))
 
