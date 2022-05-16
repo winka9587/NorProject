@@ -1,27 +1,59 @@
 import sys
 import os
 from os.path import join as pjoin
-
 sys.path.insert(0, pjoin(os.path.dirname(__file__), '..'))
 sys.path.insert(0, pjoin(os.path.dirname(__file__), '..', '..'))
 import numpy as np
-import argparse
-import pickle
-
-from configs.config import get_config
-from pose_utils.metrics import rot_diff_degree
-from pose_utils.part_dof_utils import eval_part_full
-from pose_utils.bbox_utils import eval_single_part_iou
-from utils import cvt_torch, log_loss_summary, per_dict_to_csv, add_dict
+import torch
 
 
-def parse_args():
-    parser = argparse.ArgumentParser('Model')
-    parser.add_argument('--config', type=str, default='config.yml', help='path to config.yml')
-    parser.add_argument('--obj_config', type=str, default=None, help='path to obj_config.yml')
-    parser.add_argument('--obj_category', type=str, default=None, help='path to obj_config.yml')
-    parser.add_argument('--experiment_dir', type=str, default=None, help='root dir for all outputs')
-    return parser.parse_args()
+# eval scale
+def scale_diff(scale1, scale2):
+    return torch.abs(scale1 - scale2)
+
+
+# eval translation
+def trans_diff(trans1, trans2):  # [..., 3, 1]
+    return torch.norm((trans1 - trans2).reshape((trans1 - trans2).shape[:-1]),
+                      p=2, dim=-1)  # [..., 3, 1] -> [..., 3] -> [...]
+
+
+# eval theta
+def theta_diff(theta1, theta2):
+    return torch.abs(theta1 - theta2)
+
+
+# eval rotation rad
+def rot_diff_rad(rot1, rot2, yaxis_only=False):
+    if yaxis_only:
+        if isinstance(rot1, np.ndarray):
+            y1, y2 = rot1[..., 1], rot2[..., 1]  # [Bs, 3]
+            diff = np.sum(y1 * y2, axis=-1)  # [Bs]
+            diff = np.clip(diff, a_min=-1.0, a_max=1.0)
+            return np.arccos(diff)
+        else:
+            y1, y2 = rot1[..., 1], rot2[..., 1]  # [Bs, 3]
+            diff = torch.sum(y1 * y2, dim=-1)  # [Bs]
+            diff = torch.clamp(diff, min=-1.0, max=1.0)
+            return torch.acos(diff)
+    else:
+        if isinstance(rot1, np.ndarray):
+            mat_diff = np.matmul(rot1, rot2.swapaxes(-1, -2))
+            diff = mat_diff[..., 0, 0] + mat_diff[..., 1, 1] + mat_diff[..., 2, 2]
+            diff = (diff - 1) / 2.0
+            diff = np.clip(diff, a_min=-1.0, a_max=1.0)
+            return np.arccos(diff)
+        else:
+            mat_diff = torch.matmul(rot1, rot2.transpose(-1, -2))
+            diff = mat_diff[..., 0, 0] + mat_diff[..., 1, 1] + mat_diff[..., 2, 2]
+            diff = (diff - 1) / 2.0
+            diff = torch.clamp(diff, min=-1.0, max=1.0)
+            return torch.acos(diff)
+
+
+# eval rotation degree
+def rot_diff_degree(rot1, rot2, yaxis_only=False):
+    return rot_diff_rad(rot1, rot2, yaxis_only=yaxis_only) / np.pi * 180.0
 
 
 def eval_data(name, data, obj_info):
@@ -77,6 +109,10 @@ def get_joint_state(info, pred_pose):
         joint_states.append(state)
     return np.array(joint_states)
 
+
+# ÆÀ¹ÀÁ½Ö¡µÄÎó²î
+def eval_data_2_frame(pose1, pose2):
+    pass
 
 if __name__ == "__main__":
     args = parse_args()
