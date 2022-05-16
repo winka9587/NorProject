@@ -14,6 +14,12 @@ test
 
 
 ## to do list<a id="link_todolist"></a>
+### 对照实验
++ 用第t帧作为coord得到的点云，t+1帧作为观测点云pts vs 反过来
+  
+  理论上用第t帧代替coord的角色会更好，因为初始mask的原因，t帧的点云更干净
+
+### code
 1. 主体
 > + 训练 OK
 >
