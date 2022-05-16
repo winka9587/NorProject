@@ -20,6 +20,7 @@ from lib.pointnet import Pointnet2MSG
 from lib.loss import Loss
 
 from torch.optim import lr_scheduler
+from lib.utils import render_points_diff_color
 
 from visualize import viz_multi_points_diff_color, viz_mask_bool
 
@@ -322,17 +323,33 @@ class SIFT_Track(nn.Module):
             pt0 = (xmap_masked - self.cam_cx) * pt2 / self.cam_fx     # x
             pt1 = (ymap_masked - self.cam_cy) * pt2 / self.cam_fy     # y
             points = np.concatenate((pt0, pt1, pt2), axis=1)  # xyz
+            # 测试反投影|(1)
+            points_viz = points.copy()
             points = torch.from_numpy(np.transpose(points, (2, 0, 1))).cuda()  # points (1024, 3, 1) -> (1, 1024, 3)
             points = points.type(torch.float32)
             points_bs = torch.cat((points_bs, points), 0)
             timer_1.tick('single batch | backproject')
-            # 测试读取rgb
-            # rgb_show = torch.zeros(color.shape, dtype=torch.uint8)
-            # rgb_show[ymap_masked, xmap_masked, 0] = color[ymap_masked, xmap_masked, 0]
-            # rgb_show[ymap_masked, xmap_masked, 1] = color[ymap_masked, xmap_masked, 1]
-            # rgb_show[ymap_masked, xmap_masked, 2] = color[ymap_masked, xmap_masked, 2]
-            # cv2.imshow('rgb', rgb_show.numpy())
-            # cv2.waitKey(0)
+            # 测试反投影|(2)可视化color 和 mask
+            print('data from {}'.format(frame['meta']['ori_path']))
+            cv2.imshow('rgb', color.clone().cpu().numpy())
+            cv2.waitKey(0)
+            viz_mask_bool('viz_mask', mask)
+            # 测试反投影|(3)可视化裁剪的rgb
+            rgb_show = torch.zeros(color.shape, dtype=torch.uint8)
+            rgb_show[ymap_masked, xmap_masked, 0] = color[ymap_masked, xmap_masked, 0]
+            rgb_show[ymap_masked, xmap_masked, 1] = color[ymap_masked, xmap_masked, 1]
+            rgb_show[ymap_masked, xmap_masked, 2] = color[ymap_masked, xmap_masked, 2]
+            cv2.imshow('rgb', rgb_show.numpy())
+            cv2.waitKey(0)
+            # 测试反投影|(3)可视化反投影点云
+            points_viz = np.squeeze(np.transpose(points_viz, (2, 0, 1)), 0)
+            color_red = np.array([255, 0, 0])
+            color_green = np.array([0, 255, 0])
+            color_blue = np.array([0, 0, 255])
+            pts_colors = [color_red]
+            render_points_diff_color('test backproject', [points_viz],
+                                     pts_colors, save_img=False,
+                                     show_img=True)
 
             points_rgb = color[ymap_masked, xmap_masked]
             points_rgb = points_rgb.squeeze(1).transpose(1, 0).cuda()  # points_rgb (1024, 1, 3) -> (1, 1024, 3)
@@ -550,7 +567,6 @@ class SIFT_Track(nn.Module):
         # out_pc = out.view(bs, -1, 3)
         # return out_pc
 
-
     def set_data(self, data):
         print('set_data ...')
         # 提取需要的数据,并转移到cpu,并使用新的字典来存储
@@ -559,8 +575,10 @@ class SIFT_Track(nn.Module):
         for i, frame in enumerate(data):
             if i == 0:
                 self.feed_dict.append(self.convert_init_frame_data(frame))
+                t = self.feed_dict[0]
             else:
                 self.feed_dict.append(self.convert_subseq_frame_data(frame))
+                t2 = self.feed_dict[0]
             # self.npcs_feed_dict.append(self.convert_subseq_frame_npcs_data(frame))
         print('set_data end')
 
