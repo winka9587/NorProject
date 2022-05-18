@@ -90,6 +90,23 @@ test
 
 就算已经间隔了20帧也能够找到对应点,所以可以放心地计算对应关系
 
+7. 既然前面已经找了对应点，只用有对应的点来计算bundle_adjust, 但是对应点并不是完全一样的
+该怎么办？
+
+> 能否想办法提高bundle计算A的效率？
+
+8. 提高寻找corr的速度
+> flatten and reshape 0.0001823902130126953
+> 
+> to set 3.540173053741455
+> 
+> intersection 0.00027871131896972656
+> 
+> append to list 4.513357639312744 (这里可以在to set部分修改来节省时间)
+> 
+> find correspondence of two coord 8.056186199188232
+
+
 <a id="link1"></a>
 ## 法向
 

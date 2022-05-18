@@ -584,12 +584,30 @@ class SIFT_Track(nn.Module):
             # self.npcs_feed_dict.append(self.convert_subseq_frame_npcs_data(frame))
         print('set_data end')
 
+    def find_coord_correspondence(self, coord_1, coord_2, mask_1, mask_2):
+        # 用mask切分
+
+        # 将图像转为一维, 然后取交集
+        coord_1_flatten = coord_1.flatten().reshape(coord_1.shape[0] * coord_1.shape[1], -1)
+        coord_2_flatten = coord_2.flatten().reshape(coord_2.shape[0] * coord_2.shape[1], -1)
+        coord_1_flatten_set = {(r, g, b) for [r, g, b] in coord_1_flatten}
+        coord_2_flatten_set = {(r, g, b) for [r, g, b] in coord_2_flatten}
+        coord_intersect_color = coord_1_flatten_set.intersection(coord_2_flatten_set)
+        corr_list = []
+        for r, g, b in coord_intersect_color:
+            r1, c1 = np.where((coord_1 == [r, g, b]).all(axis=-1))
+            r2, c2 = np.where((coord_2 == [r, g, b]).all(axis=-1))
+            corr_list.append((r1[0], c1[0], r2[0], c2[0]))
+        return corr_list
+
     def update(self):
         print('forwarding ...')
         points_assign_mat = self.forward()
         print('forward end')
         # 计算loss
         if self.mode == 'train':
+            # 寻找coord的对应关系
+
             print('computing loss')
             loss = self.criterion(points_assign_mat)
             print('compute loss end')
