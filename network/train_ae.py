@@ -14,8 +14,83 @@ print(os.path.dirname(os.path.abspath(__file__)))
 from network.only_sift import SIFT_Track
 from lib.utils import pose_fit, render_points_diff_color
 import torch.nn.functional as F
+from functools import reduce
 parser = argparse.ArgumentParser()
 # lr_policy
+
+
+def test_coord_correspondence():
+    # 测试coord图能否找到对应点
+    # 在两幅coord图上连线对应点, xy1 tuple(x, y)
+    def coord_line(img, img_p, xy1, xy2_s):
+        # img_ = np.hstack((coord1, coord2))
+        img_ = img.copy()
+        img_p = img_p.copy()
+        for xy2 in xy2_s:
+            y2 = xy2[1]
+            x2 = xy2[0]
+            # x2 += img.shape[1]
+            x2 += int(img.shape[1] / 2)
+            cv2.line(img_, xy1, (x2, y2), (255, 0, 0), thickness=1)
+            img_p[xy1[1], xy1[0], :] = 0
+            img_p[xy1[1], xy1[0], 2] = 255
+            img_p[y2, x2, :] = 0
+            img_p[y2, x2, 2] = 255
+        # cv2.imshow('coord respondence', img_)
+        # cv2.waitKey(0)
+        return img_, img_p
+
+    prefix_1 = '0000'
+    prefix_2 = '0040'
+    target_instance_id_1 = 1  # 去找meta文件，想要哪个模型，就取其第一个值
+    target_instance_id_2 = 5
+    coord_1_path = f'/data1/cxx/Lab_work/dataset/nocs_full/real_train/scene_1/{prefix_1}_coord.png'
+    coord_2_path = f'/data1/cxx/Lab_work/dataset/nocs_full/real_train/scene_1/{prefix_2}_coord.png'
+    coord_1 = cv2.imread(coord_1_path)
+    coord_2 = cv2.imread(coord_2_path)
+    mask_1 = cv2.imread(coord_1_path.replace('coord', 'mask'))[:, :, 2]
+    mask_2 = cv2.imread(coord_2_path.replace('coord', 'mask'))[:, :, 2]
+    mask_1 = np.where(mask_1 == target_instance_id_1, True, False)
+    mask_2 = np.where(mask_2 == target_instance_id_2, True, False)
+
+    # coord_1 = data[0]['meta']['pre_fetched']['coord'].squeeze(0).numpy()
+    # coord_2 = data[1]['meta']['pre_fetched']['coord'].squeeze(0).numpy()
+    # mask_1 = data[0]['meta']['pre_fetched']['mask'].squeeze(0).numpy()
+    # mask_2 = data[1]['meta']['pre_fetched']['mask'].squeeze(0).numpy()
+    idx1 = np.where(mask_1 == False)
+    idx2 = np.where(mask_2 == False)
+    coord_1[idx1] = 0
+    coord_2[idx2] = 0
+    coord_c = np.hstack((coord_1, coord_2))
+    coord_p = coord_c.copy()
+    idx_non_zero_1 = coord_1.nonzero()
+    color_0 = coord_2[:, :, 0].flatten()
+    color_1 = coord_2[:, :, 1].flatten()
+    color_2 = coord_2[:, :, 2].flatten()
+    for idx_1 in range(len(idx_non_zero_1[0])):
+        y1 = idx_non_zero_1[0][idx_1]
+        x1 = idx_non_zero_1[1][idx_1]
+        xy2_s = []
+        # 遍历coord_1中的点,寻找早coord2中的对应点
+        color = coord_1[y1, x1, :]
+        print(f'searching {color}')
+        _idx1 = np.where(color_0 == color[0])
+        _idx2 = np.where(color_1 == color[1])
+        _idx3 = np.where(color_2 == color[2])
+        result_idx = reduce(np.intersect1d, [_idx1, _idx2, _idx3])
+        if result_idx.shape[0] > 0:
+            for e_idx in range(result_idx.shape[0]):
+                idx_in_flatten = result_idx[e_idx]
+                y = int(idx_in_flatten / 640)
+                x = idx_in_flatten % 640
+                print(f'idx:{e_idx}; pos:({y},{x}); value:{coord_2[y, x, :]} '
+                      f'value2:{[color_0[idx_in_flatten], color_1[idx_in_flatten], color_2[idx_in_flatten]]}')
+                xy2_s.append((x, y))
+            coord_c = np.hstack((coord_1, coord_2))
+            coord_c, coord_p = coord_line(coord_c, coord_p, (x1, y1), xy2_s)  # 可视化对应关系
+    cv2.imshow('points', coord_p)
+    cv2.waitKey(0)
+
 
 parser.add_argument('--lr_policy', type=str, default='step', help='')
 parser.add_argument('--lr_step_size', type=str, default='step', help='')
@@ -44,6 +119,8 @@ parser.add_argument('--result_dir', type=str, default='results/Real', help='dire
 
 
 def train(opt):
+    test_coord_correspondence()
+
     dataset_path = '/data1/cxx/Lab_work/dataset' # 数据集路径,格式like:CAPTRA
     result_path = '/data1/cxx/Lab_work/results'  # 保存数据集的预处理结果
     obj_category = '1'  # 类id, 当前模型仅针对该类进行训练
@@ -90,7 +167,7 @@ def train(opt):
         print(f'epoch:{epoch}')
         for i, data in enumerate(train_dataloader):
             # 测试eval用
-            if i == 1:
+            if i == 0:
                 break
             print(f'data index {i}')
             trainer.set_data(data)
@@ -110,6 +187,7 @@ def train(opt):
         print('train end')
         test_loss = {}
         for i, data in enumerate(test_dataloader):
+
             points_assign_mat_list = trainer.test(data)
             # 评估位姿
             # points1和points2计算位姿

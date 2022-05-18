@@ -72,7 +72,8 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
         color = cv2.imread(depth_path.replace('depth', 'color'))
         mask = cv2.imread(depth_path.replace('depth', 'mask'))[:, :, 2]
         mask = (mask == inst_num)
-        full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask, 'color': color}
+        coord = cv2.imread(depth_path.replace('depth', 'coord'))
+        full_data['pre_fetched'] = {'depth': depth.astype(np.int16), 'mask': mask, 'color': color, 'coord': coord}
         # color
     else:
         # 不同于CAPTRA, CAMERA数据集也需要深度图和mask

@@ -21,7 +21,7 @@ test
 
 ### code
 1. 主体
-> + 训练 OK
+> + 训练 <a style="color:red">已完成</a>
 >
 > + 评估 ：将test数据集输入模型（但是不计算梯度）得到预测结果A1A2（1 OK）后，转换成两帧间的位姿RT（2 OK ）与gt进行比较。得到误差，这里需要误差评估函数（3 working ）
 >
@@ -29,7 +29,7 @@ test
 
 2. A1A2互逆损失函数 
 
-> 完成
+> <p style="color:red">已完成</p>
 
 3. 可视化工具 
 
@@ -46,12 +46,12 @@ test
 导致冗余的背景点特别多
 
 <div style="width: 60%;background-color: white">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/NorProject_imgs/2022-05-16-1V3QWy.png' width="30%" >
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/NorProject_imgs/2022-05-16-A1Mi36.png' width="30%" >
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/NorProject_imgs/2022-05-16-Kocxzg.png' width="30%" >
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/NorProject_imgs/2022-05-16-UjzahW.png' width="30%" >
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/NorProject_imgs/2022-05-16-UblDEJ.png' width="30%" >
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/NorProject_imgs/2022-05-16-J86p4J.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-16-1V3QWy.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-16-A1Mi36.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-16-Kocxzg.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-16-UjzahW.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-16-UblDEJ.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-16-J86p4J.png' width="30%" >
 
 </div>
 
@@ -66,6 +66,29 @@ test
 
 >一种方法是，每一帧都计算到prior的对应矩阵（但是prior又没有deform过，因此不准确，不过我们先假设prior与instance是完全一致的），
 
+可以直接利用coord map来找到两观测点云的对应关系，从而建立联系。 
+下图是序列中连续两帧中同一实例的coord图
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-17-e2Yaov.png' width="100%" >
+
+一种是在coord1和2之间找颜色相同的点，下图中，两帧图像上存在对应关系的点都画为蓝色
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-18-iHd5l5.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-18-MehQAS.png' width="30%" >
+
+0:1
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-18-bguj3B.png' width="100%" >
+
+0:10
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-18-wux2Qo.png' width="100%" >
+
+0:20
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-18-MFLiZ9.png' width="100%" >
+
+就算已经间隔了20帧也能够找到对应点,所以可以放心地计算对应关系
 
 <a id="link1"></a>
 ## 法向
@@ -82,60 +105,66 @@ point_into_surface = False
 下面是Real数据集中的测试数据
 <div class="img_group" style="text-align:center;">
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/2022-05-10-depth_view_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/2022-05-10-depth_view_0000__k=1_dist=20000_diff=10.jpg'/>
 <p  style="margin-top: 0">depth_view</p>
 </div>
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/2022-05-10-normal_in_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/2022-05-10-normal_in_0000__k=1_dist=20000_diff=10.jpg'/>
 <p style="margin-top: 0">normal_map_in</p>
 </div>
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/2022-05-10-normal_out_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/2022-05-10-normal_out_0000__k=1_dist=20000_diff=10.jpg'/>
+<p  style="margin-top: 0">normal_map_out</p>
+</div>
+</div>
+
+可以看到，其实NOCS数据集的深度差异并不大，FFB6D使用的数据集深度的最大最小值跨度是0~2000左右，
+但在NOCS的深度图中，临近的像素深度值往往只有个位数的差异。图中可以看到，尽管 normal map 能够将轮廓大致刻画出来
+但如果想更好地将点云分割出来还是需要借助RGB的信息。
+
+
+下面是Real数据集中的测试数据
+<div class="img_group" style="text-align:center;">
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/2022-05-10-depth_view_0000__k=1_dist=20000_diff=10.jpg'/>
+<p  style="margin-top: 0">depth_view</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/2022-05-10-normal_in_0000__k=1_dist=20000_diff=10.jpg'/>
+<p style="margin-top: 0">normal_map_in</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/2022-05-10-normal_out_0000__k=1_dist=20000_diff=10.jpg'/>
 <p  style="margin-top: 0">normal_map_out</p>
 </div>
 </div>
 下面是Real数据集中的测试数据
 <div class="img_group" style="text-align:center;">
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/2022-05-10-depth_view_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/2022-05-10-depth_view_0000__k=1_dist=20000_diff=10.jpg'/>
 <p  style="margin-top: 0">depth_view</p>
 </div>
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/2022-05-10-normal_in_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/2022-05-10-normal_in_0000__k=1_dist=20000_diff=10.jpg'/>
 <p style="margin-top: 0">normal_map_in</p>
 </div>
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/2022-05-10-normal_out_0000__k=1_dist=20000_diff=10.jpg'/>
-<p  style="margin-top: 0">normal_map_out</p>
-</div>
-</div>
-下面是Real数据集中的测试数据
-<div class="img_group" style="text-align:center;">
-<div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/2022-05-10-depth_view_0000__k=1_dist=20000_diff=10.jpg'/>
-<p  style="margin-top: 0">depth_view</p>
-</div>
-<div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/2022-05-10-normal_in_0000__k=1_dist=20000_diff=10.jpg'/>
-<p style="margin-top: 0">normal_map_in</p>
-</div>
-<div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/2022-05-10-normal_out_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/2022-05-10-normal_out_0000__k=1_dist=20000_diff=10.jpg'/>
 <p  style="margin-top: 0">normal_map_out</p>
 </div>
 </div>
 下面是Real数据集中的测试数据
 <div id="test" style="text-align:center;">
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/2022-05-10-depth_view_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/2022-05-10-depth_view_0000__k=1_dist=20000_diff=10.jpg'/>
 <p  style="margin-top: 0">depth_view</p>
 </div>
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/2022-05-10-normal_in_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/2022-05-10-normal_in_0000__k=1_dist=20000_diff=10.jpg'/>
 <p style="margin-top: 0">normal_map_in</p>
 </div>
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://gitee.com/winka9587/markdown-imgs/raw/master/2022-05-10-normal_out_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/2022-05-10-normal_out_0000__k=1_dist=20000_diff=10.jpg'/>
 <p  style="margin-top: 0">normal_map_out</p>
 </div>
 </div>

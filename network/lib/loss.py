@@ -33,8 +33,14 @@ class Loss(nn.Module):
         # bs x n_pts x nv
         # 10,1024,1024
         # 使对应矩阵的每一行成为对应点的权重
-        coords_1 = torch.bmm(soft_assign_1, points_1)  # (bs, n_pts, 3)
+        coords_1 = torch.bmm(soft_assign_1, points_2)  # (bs, n_pts, 3)  coords_1为points_1在points_2坐标系下的投影
+        # 计算diff的时候得想办法
+        # 1. 根据coord图的对应关系，只有有对应关系的点才相减
+        # 2. 根据gt RT 将points_1变换到points_2，求两者对应关系
+        # 注意【nocs与points是一一对应的，可以直接相减】
+        # 可以比较一下这两种方法计算出的loss的值
         diff = torch.abs(coords_1 - points_2)  # (bs, n_pts, 3)
+
         less = torch.pow(diff, 2) / (2.0 * self.threshold)
         higher = diff - self.threshold / 2.0
         corr_loss = torch.where(diff > self.threshold, higher, less)  # (idx0, idx1)
