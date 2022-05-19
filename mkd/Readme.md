@@ -29,7 +29,7 @@ test
 
 2. A1A2互逆损失函数 
 
-> <p style="color:red">已完成</p>
+> <a style="color:red">已完成</a>
 
 3. 可视化工具 
 
@@ -93,9 +93,9 @@ test
 7. 既然前面已经找了对应点，只用有对应的点来计算bundle_adjust, 但是对应点并不是完全一样的
 该怎么办？
 
-> 能否想办法提高bundle计算A的效率？
+> 能否想办法提高bundle计算A的效率？避免重复计算
 
-8. 提高寻找corr的速度
+8. 提高寻找两张coord图corr的速度 <a style="color:red">已完成</a>
 > flatten and reshape 0.0001823902130126953
 > 
 > to set 3.540173053741455
@@ -105,6 +105,10 @@ test
 > append to list 4.513357639312744 (这里可以在to set部分修改来节省时间)
 > 
 > find correspondence of two coord 8.056186199188232
+
+改用 hash 取代 每个像素点的RGB值 匹配之后速度提高了20多倍
+
+<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-19-DWNQrj.png' width="100%" >
 
 
 <a id="link1"></a>

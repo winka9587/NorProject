@@ -462,65 +462,13 @@ class SIFT_Track(nn.Module):
         init_nrms = init_pre_fetched['nrm']
         batch_size = len(init_masks)
         init_crop_pos = []
-        # 可以对比的点:
-        # last_frame 用mask
-        # next_frame 用mask_add
-        # for i in range(batch_size):
-        #     idx = torch.where(init_masks[i, :, :])
-        #     x_max = max(idx[1])
-        #     x_min = min(idx[1])
-        #     y_max = max(idx[0])
-        #     y_min = min(idx[0])
-        #     crop_pos_tmp = {'x_min': x_min, 'x_max': x_max, 'y_min': y_min, 'y_max': y_max}
-        #     init_crop_pos.append(crop_pos_tmp)
-        use_ = False
-        # 暂时不使用的代码
-        if use_:
-            pass
-            # sift
-            # for i in range(1, len(self.feed_dict)):
-            #     last_frame = self.feed_dict[i - 1]
-            #     next_frame = self.feed_dict[1]
-            #     last_colors = last_frame['meta']['pre_fetched']['color']
-            #     last_nrms = last_frame['meta']['pre_fetched']['nrm']
-            #     next_colors = next_frame['meta']['pre_fetched']['color']
-            #     next_nrms = next_frame['meta']['pre_fetched']['nrm']
-            #     # sift匹配
-            #     for j in range(batch_size):
-            #         last_crop_color = crop_img(last_colors[j], crop_pos[j])
-            #         next_crop_color = crop_img(next_colors[j], crop_pos[j])
-            #         timer = Timer(True)
-            #         color_sift_1, kp_xys_1, des_1 = extract_sift_kp_from_RGB(last_crop_color)
-            #         color_sift_2, kp_xys_2, des_2 = extract_sift_kp_from_RGB(next_crop_color)
-            #         timer.tick('sift feature extract')
-            #         matches = sift_match(des_1, des_2, self.matcher)
-            #         timer.tick('sift match ')
-            #         # 可以用RANSAC过滤特征点
-            #         # https://blog.csdn.net/sinat_41686583/article/details/115186277
-            #
-            #         # 取对应的normal map
-            #         last_crop_nrm = crop_img(last_nrms[j], crop_pos[j])
-            #         next_crop_nrm = crop_img(next_nrms[j], crop_pos[j])
-            #         # 可视化
-            #         # cv2.imshow('color_sift_1', color_sift_1)
-            #         # cv2.waitKey(0)
-            #         # cv2.imshow('color_sift_2', color_sift_2)
-            #         # cv2.waitKey(0)
-            #         #
-            #         # cv2.imshow('nrm_1', norm2bgr(last_crop_nrm))
-            #         # cv2.waitKey(0)
-            #         # cv2.imshow('nrm_2', norm2bgr(next_crop_nrm))
-            #         # cv2.waitKey(0)
-            #
-            #         # 提取3D点并进行匹配
-            #         # 提取xyz+RGB+normal特征进行匹配
-
 
         # try FFB6D extract 3D kp
         mask_last_frame = self.feed_dict[0]['meta']['pre_fetched']['mask']
         crop_pos_last_frame = init_crop_pos   # 记录每张图像的四个裁剪坐标
 
         points_assign_mat = []
+        gt_pose_between_frame = []
         # 第i帧
         for i in range(1, len(self.feed_dict)):
             last_frame = self.feed_dict[i - 1]
@@ -552,22 +500,39 @@ class SIFT_Track(nn.Module):
 
             points_assign_mat.append((points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2))
             # len(points_assign_mat)是帧的数量-1
-        return points_assign_mat
-        # if i != len(self.feed_dict):
-        #     # 对于不同大小crop CNN的处理
-        #     # 第一帧就使用addborder(但是对于add的部分是否要调整为0？)
-        #     # 第二帧用第一帧的addborder
-        #     # 计算出位姿后,重新计算mask
-        #     # 还有后续帧
-        #     # 将第一帧mask后的点云通过RT变换到第二帧,来为之后的帧提供mask
-        #     mask_last_frame = get_mask()
 
-        # bs = embedding.size()[0]
-        # out = F.relu(self.fc1(embedding))
-        # out = F.relu(self.fc2(out))
-        # out = self.fc3(out)
-        # out_pc = out.view(bs, -1, 3)
-        # return out_pc
+            # 计算两帧之间的gt位姿
+            pose_1_bs = last_frame['gt_part']
+            pose_2_bs = next_frame['gt_part']
+
+
+            pose_12_bs = {}
+            pose_12_bs['scale'] = pose_2_bs['scale']/pose_1_bs['scale']
+            pose_12_bs['translation'] = pose_2_bs['translation'] - pose_1_bs['translation']
+            pose_12_bs['rotation'] = torch.bmm(pose_2_bs['rotation'].squeeze(1), pose_1_bs['rotation'].squeeze(1).transpose(-2, -1))
+            # R1 = pose_1_bs['rotation'][0].squeeze(0)
+            # R2 = pose_2_bs['rotation'][0].squeeze(0)
+            # R12 = pose_12_bs['rotation'][0]
+            # rvec, _ = cv2.Rodrigues(torch.mm(torch.mm(R2, R1.inverse()), R12.inverse()).cpu().numpy())
+            # print(t)
+
+            # def get_pose_between_2_frame(pose1, pose2):
+            #     # coord_pts_RT1 = np.matmul(pose1['rotation'], coord_pts_s[0].transpose()).transpose() * pose1['scale'] + pose1['translation'].transpose()
+            #     # prior to pts
+            #     s12 = pose2['scale'] / pose1['scale']
+            #     t12 = pose2['translation'] - pose1['translation']
+            #     if isinstance(pose1['rotation'], torch.Tensor):
+            #         R12 = torch.matmul(pose2['rotation'], pose1['rotation'].transpose())
+            #     else:
+            #         R12 = np.matmul(pose2['rotation'], pose1['rotation'].transpose())
+            #     pose_12 = {}
+            #     pose_12['rotation'] = R12
+            #     pose_12['scale'] = s12
+            #     pose_12['translation'] = t12
+
+
+        return points_assign_mat, pose_12_bs
+
 
     def set_data(self, data):
         print('set_data ...')
@@ -577,39 +542,21 @@ class SIFT_Track(nn.Module):
         for i, frame in enumerate(data):
             if i == 0:
                 self.feed_dict.append(self.convert_init_frame_data(frame))
-                t = self.feed_dict[0]
             else:
                 self.feed_dict.append(self.convert_subseq_frame_data(frame))
-                t2 = self.feed_dict[0]
             # self.npcs_feed_dict.append(self.convert_subseq_frame_npcs_data(frame))
         print('set_data end')
 
-    def find_coord_correspondence(self, coord_1, coord_2, mask_1, mask_2):
-        # 用mask切分
-
-        # 将图像转为一维, 然后取交集
-        coord_1_flatten = coord_1.flatten().reshape(coord_1.shape[0] * coord_1.shape[1], -1)
-        coord_2_flatten = coord_2.flatten().reshape(coord_2.shape[0] * coord_2.shape[1], -1)
-        coord_1_flatten_set = {(r, g, b) for [r, g, b] in coord_1_flatten}
-        coord_2_flatten_set = {(r, g, b) for [r, g, b] in coord_2_flatten}
-        coord_intersect_color = coord_1_flatten_set.intersection(coord_2_flatten_set)
-        corr_list = []
-        for r, g, b in coord_intersect_color:
-            r1, c1 = np.where((coord_1 == [r, g, b]).all(axis=-1))
-            r2, c2 = np.where((coord_2 == [r, g, b]).all(axis=-1))
-            corr_list.append((r1[0], c1[0], r2[0], c2[0]))
-        return corr_list
-
     def update(self):
         print('forwarding ...')
-        points_assign_mat = self.forward()
+        points_assign_mat, pose12 = self.forward()
         print('forward end')
         # 计算loss
         if self.mode == 'train':
             # 寻找coord的对应关系
 
             print('computing loss')
-            loss = self.criterion(points_assign_mat)
+            loss = self.criterion(points_assign_mat, pose12)
             print('compute loss end')
             print(f'loss: {loss}')
             self.optimizer.zero_grad()
@@ -626,5 +573,5 @@ class SIFT_Track(nn.Module):
     def test(self, data):
         self.eval()
         self.set_data(data)
-        points_assign_mat = self.forward()
-        return points_assign_mat
+        points_assign_mat, pose12 = self.forward()
+        return points_assign_mat, pose12

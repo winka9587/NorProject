@@ -92,7 +92,7 @@ def test_coord_correspondence():
     cv2.imshow('points', coord_p)
     cv2.waitKey(0)
 
-# 测试新的球corr方法
+# 测试新的求corr方法
 def test_coord_correspondence2():
     # 测试coord图能否找到对应点
     # 在两幅coord图上连线对应点, xy1 tuple(x, y)
@@ -137,22 +137,39 @@ def test_coord_correspondence2():
         t.tick('append to list')
         return corr_list
 
+    # 返回的idx对应coord_1的坐标,可以直接通过coord_1[r,c]来进行读取
     def find_coord_correspondence2(coord_1, coord_2):
         print('==========new method==========')
+        hash_1 = coord_1.copy()
+        hash_2 = coord_2.copy()
+
         t = Timer(True)
         coord_1_flatten = coord_1.flatten().reshape(coord_1.shape[0] * coord_1.shape[1], -1)
         coord_2_flatten = coord_2.flatten().reshape(coord_2.shape[0] * coord_2.shape[1], -1)
         t.tick('flatten and reshape')
         # 能否在这里的时候将r和c一起append进去来节省时间？对应（1）的位置需要修改匹配
-        coord_1_flatten_set = np.delete(np.unique(coord_1_flatten, axis=0), [0, 0, 0], axis=0)
-        coord_2_flatten_set = np.delete(np.unique(coord_2_flatten, axis=0), [0, 0, 0], axis=0)
+        # unique会丢失idx
+        coord_1_flatten_set, idx_1 = np.unique(coord_1_flatten, return_index=True, axis=0)
+        coord_2_flatten_set, idx_2 = np.unique(coord_2_flatten, return_index=True, axis=0)
+        zero_idx1 = np.where((coord_1_flatten_set == [0, 0, 0]).all(axis=-1))[0][0]
+        zero_idx2 = np.where((coord_2_flatten_set == [0, 0, 0]).all(axis=-1))[0][0]
+        coord_1_flatten_set = np.delete(coord_1_flatten_set, [0, 0, 0], axis=0)
+        coord_2_flatten_set = np.delete(coord_2_flatten_set, [0, 0, 0], axis=0)
+        idx_1 = np.delete(idx_1, idx_1[zero_idx1], axis=0)
+        idx_2 = np.delete(idx_2, idx_2[zero_idx2], axis=0)
 
-        coord_1_flatten_set_ = {(r, g, b) for [r, g, b] in coord_1_flatten if [r, g, b] != [0, 0, 0]}
-        coord_2_flatten_set_ = {(r, g, b) for [r, g, b] in coord_2_flatten if [r, g, b] != [0, 0, 0]}
-        t.tick('to set')
-        # 可以处理{tuple}，因为它的shape打印是(n,)
-        # 但是不能处理ndarray,因为ndarray是超过一维的，会被flatten
+        # coord_1_flatten_set = np.delete(, '[0, 0, 0]\n', axis=0)
+        # coord_2_flatten_set = np.delete(np.unique(coord_2_flatten, axis=0), '[0, 0, 0]\n', axis=0)
+        # 只能用set.intersection处理{tuple}
+        # 不能用np.intersect1d来处理ndarray，即使ndarray中存的是tuple也不行，当ndarray超过一维，会被flatten
+        # 一个方法，为每个color计算一个哈希值
+        coord_1_flatten_set = [str(c) for c in coord_1_flatten_set]
+        coord_2_flatten_set = [str(c) for c in coord_2_flatten_set]
+
         color_s, f_idx_1s, f_idx_2s = np.intersect1d(coord_1_flatten_set, coord_2_flatten_set, True, True)  # 取交集
+        f_idx_1s = idx_1[f_idx_1s]
+        f_idx_2s = idx_2[f_idx_2s]
+
         t.tick('intersection')
         corr_list = []
         w1 = coord_1.shape[1]
@@ -191,14 +208,14 @@ def test_coord_correspondence2():
 
     # new
     timer = Timer(True)
-    corr_list = find_coord_correspondence(coord_1, coord_2)
-    print(f'len(corr_list): {len(corr_list)}')
-    timer.tick('find correspondence of two coord')
-    corr_list = find_coord_correspondence2(coord_1, coord_2)
-    print(f'len(corr_list): {len(corr_list)}')
+    corr_list1 = find_coord_correspondence(coord_1, coord_2)
+    print(f'len(corr_list): {len(corr_list1)}')
+    timer.tick('find correspondence of two coord old method')
+    corr_list2 = find_coord_correspondence2(coord_1, coord_2)
+    print(f'len(corr_list): {len(corr_list2)}')
     timer.tick('find correspondence of two coord new method')
     coord_p0 = np.hstack((coord_1, coord_2))
-    for r1, c1, r2, c2 in corr_list:
+    for r1, c1, r2, c2 in corr_list2:
         c2 += int(coord_1.shape[1])
         coord_p0[r1, c1, :] = 0
         coord_p0[r1, c1, 2] = 255
@@ -272,7 +289,7 @@ parser.add_argument('--result_dir', type=str, default='results/Real', help='dire
 
 
 def train(opt):
-    test_coord_correspondence2()
+    # test_coord_correspondence2()
 
     dataset_path = '/data1/cxx/Lab_work/dataset' # 数据集路径,格式like:CAPTRA
     result_path = '/data1/cxx/Lab_work/results'  # 保存数据集的预处理结果
@@ -320,8 +337,8 @@ def train(opt):
         print(f'epoch:{epoch}')
         for i, data in enumerate(train_dataloader):
             # 测试eval用
-            if i == 0:
-                break
+            # if i == 0:
+            #     break
             print(f'data index {i}')
             trainer.set_data(data)
             trainer.update()
@@ -341,7 +358,7 @@ def train(opt):
         test_loss = {}
         for i, data in enumerate(test_dataloader):
 
-            points_assign_mat_list = trainer.test(data)
+            points_assign_mat_list, pose12 = trainer.test(data)
             # 评估位姿
             # points1和points2计算位姿
             total_loss = 0.0
