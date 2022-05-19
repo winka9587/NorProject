@@ -114,6 +114,7 @@ def test_coord_correspondence2():
         # cv2.waitKey(0)
         return img_, img_p
 
+    # 在两张coord图上寻找颜色相同的点
     # coord已经用mask处理过
     def find_coord_correspondence(coord_1, coord_2):
         t = Timer(True)
@@ -133,6 +134,35 @@ def test_coord_correspondence2():
             r2, c2 = np.where((coord_2 == [r, g, b]).all(axis=-1))
             assert len(r1) == 1 and len(c1) == 1 and len(r2) == 1 and len(c2) == 1
             corr_list.append((r1[0], c1[0], r2[0], c2[0]))
+        t.tick('append to list')
+        return corr_list
+
+    def find_coord_correspondence2(coord_1, coord_2):
+        print('==========new method==========')
+        t = Timer(True)
+        coord_1_flatten = coord_1.flatten().reshape(coord_1.shape[0] * coord_1.shape[1], -1)
+        coord_2_flatten = coord_2.flatten().reshape(coord_2.shape[0] * coord_2.shape[1], -1)
+        t.tick('flatten and reshape')
+        # 能否在这里的时候将r和c一起append进去来节省时间？对应（1）的位置需要修改匹配
+        coord_1_flatten_set = np.delete(np.unique(coord_1_flatten, axis=0), [0, 0, 0], axis=0)
+        coord_2_flatten_set = np.delete(np.unique(coord_2_flatten, axis=0), [0, 0, 0], axis=0)
+
+        coord_1_flatten_set_ = {(r, g, b) for [r, g, b] in coord_1_flatten if [r, g, b] != [0, 0, 0]}
+        coord_2_flatten_set_ = {(r, g, b) for [r, g, b] in coord_2_flatten if [r, g, b] != [0, 0, 0]}
+        t.tick('to set')
+        # 可以处理{tuple}，因为它的shape打印是(n,)
+        # 但是不能处理ndarray,因为ndarray是超过一维的，会被flatten
+        color_s, f_idx_1s, f_idx_2s = np.intersect1d(coord_1_flatten_set, coord_2_flatten_set, True, True)  # 取交集
+        t.tick('intersection')
+        corr_list = []
+        w1 = coord_1.shape[1]
+        w2 = coord_2.shape[1]
+        for i in range(len(color_s)):
+            r1 = int(f_idx_1s[i] / w1)
+            c1 = f_idx_1s[i] % w1
+            r2 = int(f_idx_2s[i] / w2)
+            c2 = f_idx_2s[i] % w2
+            corr_list.append((r1, c1, r2, c2))
         t.tick('append to list')
         return corr_list
 
@@ -164,6 +194,9 @@ def test_coord_correspondence2():
     corr_list = find_coord_correspondence(coord_1, coord_2)
     print(f'len(corr_list): {len(corr_list)}')
     timer.tick('find correspondence of two coord')
+    corr_list = find_coord_correspondence2(coord_1, coord_2)
+    print(f'len(corr_list): {len(corr_list)}')
+    timer.tick('find correspondence of two coord new method')
     coord_p0 = np.hstack((coord_1, coord_2))
     for r1, c1, r2, c2 in corr_list:
         c2 += int(coord_1.shape[1])
