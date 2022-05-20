@@ -1,3 +1,4 @@
+import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -21,7 +22,14 @@ class Loss(nn.Module):
     # 问题来了, 之前求对应矩阵，是因为变形后的prior与gt点云nocs都是出于NOCS空间下，而且没有sRT的影响，因此两者理论上应该是重合的，
     # 而两帧的点云points_1和points_2是有点云影响的。
     # 难道要重建？
-    def get_corr_loss(self, soft_assign_1, points_1, points_2, pose12_gt):
+    def get_corr_loss(self, soft_assign_1, points_1, points_2, pose12_gt, sRt):
+        soft_assign_1 = soft_assign_1.type(torch.float64)
+        points_1 = points_1.type(torch.float64)
+        points_2 = points_2.type(torch.float64)
+        pose12_gt['scale'] = pose12_gt['scale'].type(torch.float64)
+        pose12_gt['rotation'] = pose12_gt['rotation'].type(torch.float64)
+        pose12_gt['translation'] = pose12_gt['translation'].type(torch.float64)
+        sRt = sRt.type(torch.float64)
         """
         Args:
             soft_assign_1: bs x n_pts x nv
@@ -45,13 +53,35 @@ class Loss(nn.Module):
 
         # 使用pose12_gt将point1变换到point2位置处
         # 然后计算diff
-        # coord_pts_RT1 = torch.matmul(pose1['rotation'], coord_pts_s[0].transpose()).transpose() * pose1['scale'] + pose1[
-        #     'translation'].transpose()
-        torch.b
-        points_1_in_2_gt = torch.bmm(pose12_gt['rotation'], points_1.transpose(-2, -1)).transpose() * pose12_gt['scale'] +
-                        pose1[
-                            #     'translation'].transpose()
-        diff = torch.abs(points_1_in_2 - xxxxxxx)  # (bs, n_pts, 3)
+        pts1to2_R = torch.bmm(pose12_gt['rotation'], points_1.transpose(-2, -1))  # (bs,3,3)x(bs,3,1024)=(bs,3,1024)
+        pts1to2_sR = pts1to2_R * pose12_gt['scale'].view((-1, 1, 1))
+        pts1to2_sRt = pts1to2_sR + pose12_gt['translation'].transpose(1, 2).squeeze(-1)
+        pts1to2_sRt = pts1to2_sRt.transpose(-1, -2)
+
+        pose12_gt_tmp = {}
+        pose12_gt_tmp['scale'] = pose12_gt['scale'].clone()
+        pose12_gt_tmp['rotation'] = pose12_gt['rotation'].clone()
+        pose12_gt_tmp['translation'] = pose12_gt['translation'].clone()
+
+        # 比较这个与pts1to2_sR可以发现， pts1to2_sR比points_1to2_sR_newMethod2多乘了一次scale
+        sRt12_gt_without_t = self.pose_dict_RT(pose12_gt_tmp)
+        sRt12_gt_without_t[:, 0:3, 3] = 0
+        points_1to2_sR_newMethod2 = self.multi_pose_with_pts(sRt12_gt_without_t, points_1)
+
+        pose12_gt_tmp['scale'][:, :] = 1
+        sRt12_gt_without_st = self.pose_dict_RT(pose12_gt_tmp)
+        sRt12_gt_without_st[:, 0:3, 3] = 0
+        points_1to2_R_newMethod = self.multi_pose_with_pts(sRt12_gt_without_st, points_1)
+
+
+        sRt_ = sRt.clone()
+        sRt_[:, 0:3, 3] = 0
+        points_1to2_sR_newMethod = self.multi_pose_with_pts(sRt_, points_1)
+
+        points_1to2_newMethod = self.multi_pose_with_pts(sRt, points_1)
+
+
+        diff = torch.abs(points_1_in_2 - pts1to2_sRt)  # (bs, n_pts, 3)
 
         less = torch.pow(diff, 2) / (2.0 * self.threshold)
         higher = diff - self.threshold / 2.0
@@ -73,6 +103,35 @@ class Loss(nn.Module):
         cos_sim_loss = 1 - F.cosine_similarity(torch.flatten(mat1, 1), torch.flatten(mat2, 1))
         return cos_sim_loss.mean().item()
 
+    def pose_dict_RT(self, pose_dict):
+        scale = pose_dict['scale']    # (bs, 1)
+        RMat = pose_dict['rotation']  # (bs, 3, 3)
+        tVec = pose_dict['translation']  # (bs, 1, 3, 1)
+
+        sR = RMat * scale.view((-1, 1, 1))  # (bs, 3, 3)
+        sRt = torch.cat((RMat, tVec.transpose(1, 2).squeeze(-1)), 2)  # (bs, 3, 4)
+        bottom = torch.zeros(RMat.shape[0], 1, 4).cuda()  # (bs, 1, 4)
+        bottom[:, :, 3] = 1
+        sRt01 = torch.cat((sRt, bottom), 1)  # (bs, 4, 4)
+        return sRt01
+
+    def multi_pose_with_pts(self, pose_sRT, points):
+        # points    (bs, 1024, 3)
+        # pose_sRT  (bs, 4, 4)
+        pts = points.clone()
+        pts = pts.transpose(1, 2)  # (bs, 3, 1024)
+        one_ = torch.ones(pts.shape[0], 1, 1024).cuda()
+        pts = torch.cat((pts, one_), 1)  # (bs, 4, 1024)
+        res_pts_4 = torch.bmm(pose_sRT, pts)  # (bs, 4, 4)*(bs, 4, 1024)
+        # (bs, 4, 1024)
+        return res_pts_4[:, 0:3, :]
+
+    # 将pose反转
+    def pose_inverse(self, sRt_bs):
+        sRt_bs_inv = torch.inverse(sRt_bs)
+        return sRt_bs_inv
+
+
     def get_total_loss_2_frame(self, points_1,  points_2, assign_mat_1, assign_mat_2, pose12_gt):
         # def forward(self, assign_mat, deltas, prior, nocs, model):
         """
@@ -85,8 +144,13 @@ class Loss(nn.Module):
         soft_assign_1 = F.softmax(assign_mat_1, dim=2)
         soft_assign_2 = F.softmax(assign_mat_2, dim=2)
 
-        corr_loss_1 = self.get_corr_loss(soft_assign_1, points_1, points_2, pose12_gt)
-        corr_loss_2 = self.get_corr_loss(soft_assign_2, points_2, points_1, pose12_gt)
+
+        sRt12_gt = self.pose_dict_RT(pose12_gt)
+        sRt21_gt = self.pose_inverse(sRt12_gt)
+
+        inv_test = torch.bmm(sRt21_gt, sRt12_gt)
+        corr_loss_1 = self.get_corr_loss(soft_assign_1, points_1, points_2, pose12_gt, sRt12_gt)
+        corr_loss_2 = self.get_corr_loss(soft_assign_2, points_2, points_1, sRt21_gt)
 
         # 2. Regularization Loss
         # entropy loss to encourage peaked distribution

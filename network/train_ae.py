@@ -15,10 +15,12 @@ from network.only_sift import SIFT_Track
 from lib.utils import pose_fit, render_points_diff_color
 import torch.nn.functional as F
 from functools import reduce
-from utils import Timer
 parser = argparse.ArgumentParser()
 # lr_policy
 
+# little utils
+from utils import Timer
+from tqdm import tqdm
 
 def test_coord_correspondence():
     # 测试coord图能否找到对应点
@@ -333,13 +335,11 @@ def train(opt):
     trainer.cuda()
     if resume_model != '':
         trainer.load_state_dict(torch.load(resume_model))
-    for epoch in range(opt.start_epoch, opt.max_epoch + 1):
-        print(f'epoch:{epoch}')
-        for i, data in enumerate(train_dataloader):
+    for epoch in tqdm(range(opt.start_epoch, opt.max_epoch + 1), desc='Epoch:', position=0, leave=True):
+        for i, data in enumerate(tqdm(train_dataloader, desc='training:', position=0, leave=True)):
             # 测试eval用
             # if i == 0:
             #     break
-            print(f'data index {i}')
             trainer.set_data(data)
             trainer.update()
 
@@ -356,8 +356,7 @@ def train(opt):
             # 在forward中 ,首先用mask add_border,然后裁剪depth，输入normalspeed
         print('train end')
         test_loss = {}
-        for i, data in enumerate(test_dataloader):
-
+        for i, data in enumerate(tqdm(test_dataloader, desc='testing', position=0, leave=True)):
             points_assign_mat_list, pose12 = trainer.test(data)
             # 评估位姿
             # points1和points2计算位姿
@@ -420,7 +419,7 @@ def train(opt):
 
                 # 与gt进行比较
 
-            return total_loss
+            #return total_loss
 
         # 保存模型
         torch.save(trainer.state_dict(), '{0}/model_cat{1}_{2:02d}.pth'.format(opt.result_dir, obj_category, epoch))
