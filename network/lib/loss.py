@@ -62,25 +62,7 @@ class Loss(nn.Module):
         pose12_gt_tmp['scale'] = pose12_gt['scale'].clone()
         pose12_gt_tmp['rotation'] = pose12_gt['rotation'].clone()
         pose12_gt_tmp['translation'] = pose12_gt['translation'].clone()
-
-        # 比较这个与pts1to2_sR可以发现， pts1to2_sR比points_1to2_sR_newMethod2多乘了一次scale
-        sRt12_gt_without_t = self.pose_dict_RT(pose12_gt_tmp)
-        sRt12_gt_without_t[:, 0:3, 3] = 0
-        points_1to2_sR_newMethod2 = self.multi_pose_with_pts(sRt12_gt_without_t, points_1)
-
-        pose12_gt_tmp['scale'][:, :] = 1
-        sRt12_gt_without_st = self.pose_dict_RT(pose12_gt_tmp)
-        sRt12_gt_without_st[:, 0:3, 3] = 0
-        points_1to2_R_newMethod = self.multi_pose_with_pts(sRt12_gt_without_st, points_1)
-
-
-        sRt_ = sRt.clone()
-        sRt_[:, 0:3, 3] = 0
-        points_1to2_sR_newMethod = self.multi_pose_with_pts(sRt_, points_1)
-
         points_1to2_newMethod = self.multi_pose_with_pts(sRt, points_1)
-
-
         diff = torch.abs(points_1_in_2 - pts1to2_sRt)  # (bs, n_pts, 3)
 
         less = torch.pow(diff, 2) / (2.0 * self.threshold)
@@ -109,7 +91,7 @@ class Loss(nn.Module):
         tVec = pose_dict['translation']  # (bs, 1, 3, 1)
 
         sR = RMat * scale.view((-1, 1, 1))  # (bs, 3, 3)
-        sRt = torch.cat((RMat, tVec.transpose(1, 2).squeeze(-1)), 2)  # (bs, 3, 4)
+        sRt = torch.cat((sR, tVec.transpose(1, 2).squeeze(-1)), 2)  # (bs, 3, 4)
         bottom = torch.zeros(RMat.shape[0], 1, 4).cuda()  # (bs, 1, 4)
         bottom[:, :, 3] = 1
         sRt01 = torch.cat((sRt, bottom), 1)  # (bs, 4, 4)
@@ -124,7 +106,8 @@ class Loss(nn.Module):
         pts = torch.cat((pts, one_), 1)  # (bs, 4, 1024)
         res_pts_4 = torch.bmm(pose_sRT, pts)  # (bs, 4, 4)*(bs, 4, 1024)
         # (bs, 4, 1024)
-        return res_pts_4[:, 0:3, :]
+        res_pts_4 = res_pts_4[:, 0:3, :].transpose(-1, -2)
+        return res_pts_4
 
     # 将pose反转
     def pose_inverse(self, sRt_bs):
