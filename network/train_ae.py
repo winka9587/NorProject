@@ -2,7 +2,7 @@
 import os
 import cv2
 import numpy as np
-device_ids = "4"
+device_ids = "3"
 os.environ['CUDA_VISIBLE_DEVICES'] = device_ids
 from data.dataset import RealSeqDataset
 from torch.utils.data import DataLoader
@@ -354,6 +354,9 @@ def train(opt):
             # 读取深度图和mask， mask add_border， 提取normal map ， 自编码器训练
 
             # 在forward中 ,首先用mask add_border,然后裁剪depth，输入normalspeed
+        # 保存模型
+        model_save_path = os.path.join(os.path.abspath('..'), opt.result_dir)
+        torch.save(trainer.state_dict(), '{0}/model_cat{1}_{2:02d}.pth'.format(model_save_path, obj_category, epoch))
         print('train end')
         test_loss = {}
         for i, data in enumerate(tqdm(test_dataloader, desc='testing', position=0, leave=True)):
@@ -367,10 +370,11 @@ def train(opt):
                 assign_matrix_bs_1 = F.softmax(assign_matrix_bs_1, dim=2)
                 assign_matrix_bs_2 = F.softmax(assign_matrix_bs_2, dim=2)
 
-                assigned_points2 = torch.bmm(assign_matrix_bs_2, points_bs_1)
-                # assigned_points2与point_bs_2计算位姿
-                for j in range(len(assigned_points2)):
-                    assigned_points = assigned_points2[j].cpu().detach().numpy()
+                assigned_points_1in2_bs = torch.bmm(assign_matrix_bs_1, points_bs_2)  # pts1在2坐标系下的映射
+                # assigned_points_1in2_bs与point_bs_1计算位姿
+                for j in range(len(assigned_points_1in2_bs)):
+                    assigned_points = assigned_points_1in2_bs[j].cpu().detach().numpy()
+                    points_1 = points_bs_1[j].cpu().detach().numpy()
                     points_2 = points_bs_2[j].cpu().detach().numpy()
 
                     cv2.imshow('frame1 color', data[frame_pair_idx]['meta']['pre_fetched']['color'].numpy().squeeze(0))
@@ -394,7 +398,7 @@ def train(opt):
                                              show_img=True)
                     # 测试
                     # points_1和2拟合位姿，然后变换1
-                    predicted_pose12 = pose_fit(assigned_points, points_2)  # 总是返回None是为什么？？？
+                    predicted_pose12 = pose_fit(points_1, assigned_points)  # 总是返回None是为什么？？？
                     points_1_RT = np.matmul(predicted_pose12['rotation'], points_1.transpose()).transpose() * predicted_pose12[
                         'scale'] + predicted_pose12['translation'].transpose()
                     render_points_diff_color('pose_fit pts1:green pts2:red', [points_1_RT, points_2],
@@ -421,8 +425,7 @@ def train(opt):
 
             #return total_loss
 
-        # 保存模型
-        torch.save(trainer.state_dict(), '{0}/model_cat{1}_{2:02d}.pth'.format(opt.result_dir, obj_category, epoch))
+
 
 
 if __name__ == "__main__":

@@ -2,13 +2,11 @@
 import numpy as np
 import time
 import cv2
-import torch
+import os
 import normalSpeed
 
 
 def norm2bgr(norm):
-    if isinstance(norm, torch.Tensor):
-        norm = norm.clone().detach().cpu().numpy()
     norm = ((norm + 1.0) * 127).astype("uint8")
     return norm
 
@@ -18,19 +16,49 @@ def depth2show(depth, norm_type='max'):
     return show_depth
 
 
-if __name__ == "__main__":
-    fx = 1736.0597
-    fy = 1740.7188
+def generate_all(root_path, save_path):
+    for file in os.listdir(root_path):
+        if file[-10:] == '_depth.png':
+            generate_single(root_path, save_path, file, viz=False)
 
-    k_size = 5
-    distance_threshold = 2000
-    difference_threshold = 20
+
+def generate_single(root_path, save_root_path, depth_name, viz=True, save=True):
+    # real
+    fx = 591.0125
+    fy = 590.16775
+    # camera
+    # fx = 577.5
+    # fy = 577.5
+
+    k_size = 1  # pixel
+    distance_threshold = 50000  # mm
+
     point_into_surface = False
+    scale = float(1.0)
+    difference_threshold = 50 # mm
 
-    # color = np.load("examplePicture/color.npy")
-    depth = np.load("examplePicture/depth.npy")
+    # root_path = '/data1/cxx/Lab_work/dataset/nocs_full/real_train/scene_1/'
+    # save_root_path = '/data1/cxx/normalSpeed-master/examplePicture/'
+    # depth_name = '0001_depth.png'
+    depth_path = os.path.join(root_path, depth_name)
+
+
+    # color = np.load("examplePicture/0000_depth.npy")
+    # depth = np.load("examplePicture/depth.npy")
+    # depth = depth.astype(np.uint16)
+    # depth = cv2.imread(depth_path, -1)[50:240, 150:380]
+    depth = cv2.imread(depth_path, -1)
+    for i in depth:
+        for j in i:
+            print(j, end=',')
+        print('\n')
+    print(f'depth:\n{depth}')
+    # print(f'depth.dtype:\n{depth.dtype}')
+    # depth = cv2.imread("examplePicture/0001_depth.png")[:,:,0]
+    depth = depth * scale
+    # print(f'depth: (float) {np.max(depth)},{np.min(depth)}')
     depth = depth.astype(np.uint16)
-
+    # print(f'depth: (int)   {np.max(depth)},{np.min(depth)}')
     t1 = time.time()
     """
     The coordinate of depth and normal is in cv coordinate:
@@ -38,20 +66,36 @@ if __name__ == "__main__":
         - y is down (to align to the actual pixel coordinates used in digital images)
         - right-handed: positive z look-at direction
     """
-    normals_map_out = normalSpeed.depth_normal(depth, fx, fy, k_size, distance_threshold, difference_threshold, point_into_surface)
+    normals_map_out = normalSpeed.depth_normal(depth, fx, fy, k_size, distance_threshold, difference_threshold,
+                                               point_into_surface)
 
     # If the normal point out the surface, the z of normal should be negetive.
-    print("normals_map_out z mean:",  normals_map_out[:, :, 2].mean())
+    print("normals_map_out z mean:", normals_map_out[:, :, 2].mean())
     # If the normal point into the surface, the z of normal should be positive, as z of depth.
     normals_map_in = normalSpeed.depth_normal(depth, fx, fy, k_size, distance_threshold, difference_threshold, True)
-    print("normals_map_in z mean:",  normals_map_in[:, :, 2].mean())
+    print("normals_map_in z mean:", normals_map_in[:, :, 2].mean())
 
-    cv2.imshow('norm_out', norm2bgr(normals_map_out))
-    # imwrite("examplePicture/normal_out.jpg", norm2bgr(normals_map_out))
+    info = f"_k={k_size}_dist={distance_threshold}_diff={difference_threshold}_scale_{scale}"
 
-    cv2.imshow('norm_in', norm2bgr(normals_map_in))
-    # imwrite("examplePicture/normal_in.jpg", norm2bgr(normals_map_in))
+    if viz:
+        cv2.imshow('norm_out', norm2bgr(normals_map_out))
+        cv2.imshow('norm_in', norm2bgr(normals_map_in))
+        cv2.imshow('depth', depth2show(depth))
+        cv2.waitKey(10000)
 
-    cv2.imshow('depth', depth2show(depth))
-    # imwrite('examplePicture/depth_view.jpg', depth2show(depth))
-    cv2.waitKey(0)
+    if save:
+        cv2.imwrite(os.path.join(save_root_path, f"normal_out_{depth_name[-14:-10]}_{info}.png"), norm2bgr(normals_map_out))
+        cv2.imwrite(os.path.join(save_root_path, f"normal_in_{depth_name[-14:-10]}_{info}.png"), norm2bgr(normals_map_in))
+        cv2.imwrite(os.path.join(save_root_path, f"depth_view_{depth_name[-14:-10]}_{info}.png"), depth2show(depth))
+
+
+if __name__ == "__main__":
+    root_path = '/data1/cxx/Lab_work/dataset/nocs_full/real_train/scene_1/'
+    save_root_path = '/data1/cxx/normalSpeed-master/examplePicture/'
+    depth_name = '0425_depth.png'
+    generate_single(root_path, save_root_path, depth_name, save=True)
+
+    # root_path = '/data1/cxx/Lab_work/dataset/nocs_full/real_train/scene_1/'
+    # folder_name = 'train_1'
+    # save_root_path = os.path.join('/data1/cxx/normalmap/', folder_name)
+    # generate_all(root_path, save_root_path)

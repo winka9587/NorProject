@@ -46,12 +46,12 @@ test
 导致冗余的背景点特别多
 
 <div style="width: 60%;background-color: white">
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-16-1V3QWy.png' width="30%" >
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-16-A1Mi36.png' width="30%" >
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-16-Kocxzg.png' width="30%" >
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-16-UjzahW.png' width="30%" >
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-16-UblDEJ.png' width="30%" >
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-16-J86p4J.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-16-1V3QWy.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-16-A1Mi36.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-16-Kocxzg.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-16-UjzahW.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-16-UblDEJ.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-16-J86p4J.png' width="30%" >
 
 </div>
 
@@ -69,24 +69,24 @@ test
 可以直接利用coord map来找到两观测点云的对应关系，从而建立联系。 
 下图是序列中连续两帧中同一实例的coord图
 
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-17-e2Yaov.png' width="100%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-17-e2Yaov.png' width="100%" >
 
 一种是在coord1和2之间找颜色相同的点，下图中，两帧图像上存在对应关系的点都画为蓝色
 
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-18-iHd5l5.png' width="30%" >
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-18-MehQAS.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-18-iHd5l5.png' width="30%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-18-MehQAS.png' width="30%" >
 
 0:1
 
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-18-bguj3B.png' width="100%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-18-bguj3B.png' width="100%" >
 
 0:10
 
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-18-wux2Qo.png' width="100%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-18-wux2Qo.png' width="100%" >
 
 0:20
 
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-18-MFLiZ9.png' width="100%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-18-MFLiZ9.png' width="100%" >
 
 就算已经间隔了20帧也能够找到对应点,所以可以放心地计算对应关系
 
@@ -108,7 +108,7 @@ test
 
 改用 hash 取代 每个像素点的RGB值 匹配之后速度提高了20多倍
 
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-19-DWNQrj.png' width="100%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-19-DWNQrj.png' width="100%" >
 
 
 <a id="link1"></a>
@@ -122,20 +122,20 @@ distance_threshold = 20000      # 单位:mm     深度值超过这个点云不再参与计算
 difference_threshold = 10       # 单位:mm     卷积核中与中心点深度差超过该值则不参与计算
 point_into_surface = False
 ```
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-19-color_mask.gif' width="50%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-19-color_mask.gif' width="50%" >
 
 下面是Real数据集中的测试数据
 <div class="img_group" style="text-align:center;">
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-10-depth_view_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-10-depth_view_0000__k=1_dist=20000_diff=10.jpg'/>
 <p  style="margin-top: 0">depth_view</p>
 </div>
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-10-normal_in_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-10-normal_in_0000__k=1_dist=20000_diff=10.jpg'/>
 <p style="margin-top: 0">normal_map_in</p>
 </div>
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-10-normal_out_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-10-normal_out_0000__k=1_dist=20000_diff=10.jpg'/>
 <p  style="margin-top: 0">normal_map_out</p>
 </div>
 </div>
@@ -148,18 +148,27 @@ point_into_surface = False
 下面是Real数据集中的测试数据
 <div class="img_group" style="text-align:center;">
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-19-2022-05-10-depth_view_0000__k=1_dist=20000_diff=10.jpg' width="100%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-19-2022-05-10-depth_view_0000__k=1_dist=20000_diff=10.jpg' width="100%" >
 <p  style="margin-top: 0">depth_view</p>
 </div>
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-10-normal_in_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-10-normal_in_0000__k=1_dist=20000_diff=10.jpg'/>
 <p style="margin-top: 0">normal_map_in</p>
 </div>
 <div class="sub_img" style="width:30%;display: inline-block;">
-<img src='https://winka9587-bucket.oss-cn-qingdao.aliyuncs.com/Norproject_md/2022-05-10-normal_out_0000__k=1_dist=20000_diff=10.jpg'/>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-10-normal_out_0000__k=1_dist=20000_diff=10.jpg'/>
 <p  style="margin-top: 0">normal_map_out</p>
 </div>
 </div>
 
+###距离问题
+像下图中这样，远处的点不参与计算，乍一看以为是 distance_threshold 的问题，
+当点的z值超过某一个值就不参与运算了
 
+但实际上是 difference_threshold 的问题，当算子周围的像素Z值超过这个阈值之后就会不参与匀速，
+应该是因为远处的点之间的距离会越来越大。
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-05-23-normal_in_0018__k=1_dist=20000_diff=5_scale_1.0.png' width="100%" >
+
+因此只需要将这个值增大即可，下面是5->50
 
