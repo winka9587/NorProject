@@ -42,13 +42,13 @@ def train(opt):
                           subseq_len=subseq_len,
                           num_expr=num_expr,
                           device=device)
-    test_dataset = RealSeqDataset(dataset_path=dataset_path,
-                                   result_path=result_path,
-                                   obj_category=obj_category,
-                                   mode='real_test',
-                                   subseq_len=-1,
-                                   num_expr=num_expr,
-                                   device=device)
+    # test_dataset = RealSeqDataset(dataset_path=dataset_path,
+    #                                result_path=result_path,
+    #                                obj_category=obj_category,
+    #                                mode='real_test',
+    #                                subseq_len=-1,
+    #                                num_expr=num_expr,
+    #                                device=device)
     print(f'Successfully Load NOCSDataSet {num_expr}_{mode}_{obj_category}')
 
 
@@ -58,7 +58,7 @@ def train(opt):
     shuffle = False
     num_workers = 0
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
-    test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=num_workers)
+    # test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=num_workers)
 
     emb_dim = 512
     num_points = 1024
@@ -80,81 +80,23 @@ def train(opt):
             trainer.set_data(data)
             trainer.update()
 
-            # print(data['path'])
-            # if 'real' in mode:
-            #     # Real
-            #     replace_str = '_composed'
-            # else:
-            #     replace_str = '_depth'
-            # # 如何操作batch？？？？for？？？？看看captra和SPD是怎么做的
-            # # depth = cv2.imread()
-            # 读取深度图和mask， mask add_border， 提取normal map ， 自编码器训练
+            # 测试，得到两帧的mask与nrm与depth
+            # 反投影得到点云xyz，
+            def test_NCD(nrm1, nrm2, mask1, mask2):
+                # 一、mask+nrm -> 法向nrm的 nx3矩阵
+                idx1 = torch.where(mask1)
+                idx2 = torch.where(mask2)
+                nrm_pcd1 = nrm1[idx1]
+                nrm_pcd2 = nrm2[idx2]
 
-            # 在forward中 ,首先用mask add_border,然后裁剪depth，输入normalspeed
-        print('train end')
-        test_loss = {}
-        for i, data in enumerate(test_dataloader):
-            points_assign_mat_list = trainer.test(data)
-            # 评估位姿
-            # points1和points2计算位姿
-            total_loss = 0.0
-            for frame_pair_idx in range(len(points_assign_mat_list)):
-                frame_pair = points_assign_mat_list[frame_pair_idx]
-                points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2 = frame_pair
-                assigned_points2 = torch.bmm(assign_matrix_bs_2, points_bs_1)
-                # assigned_points2与point_bs_2计算位姿
-                for j in range(len(assigned_points2)):
-                    assigned_points = assigned_points2[j].cpu().detach().numpy()
-                    points_2 = points_bs_2[j].cpu().detach().numpy()
-
-                    cv2.imshow('frame1 color', data[frame_pair_idx]['meta']['pre_fetched']['color'].numpy().squeeze(0))
-                    cv2.waitKey(0)
-                    cv2.imshow('frame2 color', data[frame_pair_idx + 1]['meta']['pre_fetched']['color'].numpy().squeeze(0))
-                    cv2.waitKey(0)
-
-                    color_red = np.array([255, 0, 0])
-                    color_green = np.array([0, 255, 0])
-                    color_blue = np.array([0, 0, 255])
-                    pts_colors = [color_green, color_red]
-                    points_1 = points_bs_1[j].cpu().detach().numpy()
-                    render_points_diff_color('assigned_points:green points_2:red', [points_1, points_2],
-                                             pts_colors, save_img=False,
-                                             show_img=True)
-
-                    # 测试
-                    # points_1和2拟合位姿，然后变换1
-                    predicted_pose12 = pose_fit(points_1, points_2)
-                    points_1_RT = np.matmul(predicted_pose12['rotation'], points_1.transpose()).transpose() * predicted_pose12[
-                        'scale'] + predicted_pose12['translation'].transpose()
-                    render_points_diff_color('pose_fit pts1:green pts2:red', [points_1_RT, points_2],
-                                             pts_colors, save_img=False,
-                                             show_img=True)
-
-                    render_points_diff_color('assigned_points:green points_2:red', [assigned_points, points_2], pts_colors, save_img=False,
-                             show_img=True)
-                    predicted_pose12 = pose_fit(points_2, points_2)  # 模型预测的位姿
-                    # 获得前后两帧的sRT
-                    # meta中的位姿nocs2camera是 get_gt_poses.py中的函数
-                    # get_image_pose(num_instances, mask, coord, depth, intrinsics):
-                    # 通过函数 pose = pose_fit(coord_pts, pts)获得的
-                    sRT1 = data[frame_pair_idx]['meta']['nocs2camera'][0]
-                    sRT2 = data[frame_pair_idx+1]['meta']['nocs2camera'][0]
-                    R12 = torch.mm(torch.inverse(sRT1['rotation'].squeeze(0)), sRT2['rotation'].squeeze(0))
-
-                    # 按理说 R12 应该与 gt meta中的points pose_fit得到的旋转一样
-                    gt_points1 = data[frame_pair_idx]['points'].cpu().squeeze(0).transpose(0, 1).numpy()
-                    gt_points2 = data[frame_pair_idx+1]['points'].cpu().squeeze(0).transpose(0, 1).numpy()
-                    gt_pose12 = pose_fit(gt_points1, gt_points2)
+                # 二、两组nx3计算NCD
 
 
-                # 与gt进行比较
-                print(pose)
-                print(data)
-            return total_loss
-
-        # 保存模型
-        torch.save(trainer.state_dict(), '{0}/model_cat{1}_{2:02d}.pth'.format(opt.result_dir, obj_category, epoch))
-
+            nrm1 = data[0]['meta']['pre_fetched']['nrm'][0]  # (480, 640, 3)
+            nrm2 = data[1]['meta']['pre_fetched']['nrm'][0]
+            mask1 = data[0]['meta']['pre_fetched']['mask'][0]
+            mask2 = data[1]['meta']['pre_fetched']['mask'][0]
+            test_NCD(nrm1, nrm2, mask1, mask2)
 
 if __name__ == "__main__":
     opt = parser.parse_args()

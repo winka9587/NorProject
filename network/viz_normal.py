@@ -473,48 +473,6 @@ class SIFT_Track_normal_viz(nn.Module):
         #     y_min = min(idx[0])
         #     crop_pos_tmp = {'x_min': x_min, 'x_max': x_max, 'y_min': y_min, 'y_max': y_max}
         #     init_crop_pos.append(crop_pos_tmp)
-        use_ = False
-        # 暂时不使用的代码
-        if use_:
-            pass
-            # sift
-            # for i in range(1, len(self.feed_dict)):
-            #     last_frame = self.feed_dict[i - 1]
-            #     next_frame = self.feed_dict[1]
-            #     last_colors = last_frame['meta']['pre_fetched']['color']
-            #     last_nrms = last_frame['meta']['pre_fetched']['nrm']
-            #     next_colors = next_frame['meta']['pre_fetched']['color']
-            #     next_nrms = next_frame['meta']['pre_fetched']['nrm']
-            #     # sift匹配
-            #     for j in range(batch_size):
-            #         last_crop_color = crop_img(last_colors[j], crop_pos[j])
-            #         next_crop_color = crop_img(next_colors[j], crop_pos[j])
-            #         timer = Timer(True)
-            #         color_sift_1, kp_xys_1, des_1 = extract_sift_kp_from_RGB(last_crop_color)
-            #         color_sift_2, kp_xys_2, des_2 = extract_sift_kp_from_RGB(next_crop_color)
-            #         timer.tick('sift feature extract')
-            #         matches = sift_match(des_1, des_2, self.matcher)
-            #         timer.tick('sift match ')
-            #         # 可以用RANSAC过滤特征点
-            #         # https://blog.csdn.net/sinat_41686583/article/details/115186277
-            #
-            #         # 取对应的normal map
-            #         last_crop_nrm = crop_img(last_nrms[j], crop_pos[j])
-            #         next_crop_nrm = crop_img(next_nrms[j], crop_pos[j])
-            #         # 可视化
-            #         # cv2.imshow('color_sift_1', color_sift_1)
-            #         # cv2.waitKey(0)
-            #         # cv2.imshow('color_sift_2', color_sift_2)
-            #         # cv2.waitKey(0)
-            #         #
-            #         # cv2.imshow('nrm_1', norm2bgr(last_crop_nrm))
-            #         # cv2.waitKey(0)
-            #         # cv2.imshow('nrm_2', norm2bgr(next_crop_nrm))
-            #         # cv2.waitKey(0)
-            #
-            #         # 提取3D点并进行匹配
-            #         # 提取xyz+RGB+normal特征进行匹配
-
 
         # try FFB6D extract 3D kp
         mask_last_frame = self.feed_dict[0]['meta']['pre_fetched']['mask']
