@@ -232,4 +232,60 @@ CD距离：每一个点，计算另一个点云中与他最近的点；反之也一样。
 
 问题2：这样是否会导致趋向于匹配点云法向为0的点？如果出现了这种情况，法向为NaN的点不参与计算。
 
-先拿两帧的点云测试一下normalCD的效果如何
+先拿两帧的点云测试一下对normal_pcd计算CD的效果如何
+
+<div class="img_group" style="text-align:center;">
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-02-0000_color.png' width="100%" >
+<p  style="margin-top: 0">real_train/scene_5/0000</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-02-0010_color.png' width="100%" >
+<p style="margin-top: 0">real_train/scene_5/0010</p>
+</div>
+</div>
+
+有意思的是，点云空间和normal点云空间可以构建对应关系。
+下图中的是mask裁剪的点云点的法向点云
+<div class="img_group" style="text-align:center;">
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-02-nrmpcd.gif' width="100%" >
+<p  style="margin-top: 0">green:0000, red:0001</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-02-nrmpcd2.gif' width="100%" >
+<p style="margin-top: 0">green:0000, red:0010</p>
+</div>
+</div>
+
+甚至能找到一条线将其切开
+
+<div class="img_group" style="text-align:center;">
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-02-Xe4rVj.png' width="100%" >
+<p  style="margin-top: 0">green:0000, red:0001</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-02-VEhKZJ.png' width="100%" >
+<p style="margin-top: 0">green:0000, red:0001</p>
+</div>
+</div>
+
+但是有问题，下图是0000和0010的法向点云，但是0010的点云是使用0000的mask_add裁剪的，但其计算出的CD loss的值却是0.003994
+0000和0001的gt_mask裁剪的法向点云的cd loss都是0.004569，只是因为点更多，导致只要点的数量够多，就有可能出现接近的法向，因为法向一共就那么几个方向。
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-02-TcJ0JE.png' width="60%" >
+
+那么，使用法向来分割的思路是否可行？
+<p style="color:red">
+做这个分割的初衷是因为3D-GCN可能不满足跟踪任务对速度的要求，但是本身这个任务很简单，只在一小片区域内寻找目标物体。
+</p>
+一种思路，normal map训练分割，数据量肯定足够，对于每一个物体，对其深度图进行crop作为原始输入
+因为在跟踪中需要的也是输入一个mask过的depth1和一个切割过的depth2得到depth2的mask
+
+另一种思路，是否可以用transformer来做？ (Q法向+K法向) V第一帧mask -> 第二帧mask
+
+
+法向缺失的部分存疑，可能是物体的一部分，也可能不是。需要额外处理
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-02-normal_out_0666__k=6_dist=50000_diff=20_scale_1.0.png' width="100%" >

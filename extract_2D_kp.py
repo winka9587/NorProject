@@ -22,7 +22,7 @@ def sift_match(des_1, des_2, matcher=None, k=2):
     return matches
 
 
-def drawMatchesKnn_cv2(img1_gray, kp1, img2_gray, kp2, goodMatch, opt):
+def drawMatchesKnn_cv2(img1_gray, kp1, img2_gray, kp2, goodMatch, is_vis=True):
     points_1 = []
     points_2 = []
     h1, w1 = img1_gray.shape[:2]
@@ -42,8 +42,8 @@ def drawMatchesKnn_cv2(img1_gray, kp1, img2_gray, kp2, goodMatch, opt):
         cv2.line(vis, (x1, y1), (x2, y2), (0, 0, 255))
         points_1.append([x1, y1])
         points_2.append([x2, y2])
-    # 可视化sift匹配结果
-    if opt.vis:
+    # 鍙鍖杝ift鍖归厤缁撴灉
+    if is_vis:
         cv2.namedWindow("match", cv2.WINDOW_NORMAL)
         cv2.imshow("match", vis)
         cv2.waitKey(0)

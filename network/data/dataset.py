@@ -134,9 +134,9 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
         fx = 577.5
         fy = 577.5
 
-    k_size = 1
+    k_size = 3
     distance_threshold = 2000
-    difference_threshold = 10  # 周围的点深度距离超过10mm则不考虑
+    difference_threshold = 20  # 周围的点深度距离超过10mm则不考虑
     point_into_surface = False
 
     # color = np.load("examplePicture/color.npy")

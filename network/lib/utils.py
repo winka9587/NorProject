@@ -1040,7 +1040,7 @@ def pose_fit(source, target, num_hyps=1024, inlier_th=1e-3):  # src, tgt: [N, 3]
 
 
 # color np.array([0, 0, 0])
-def render_points_diff_color(name, pts_list, color_list, save_img = True, show_img=True):
+def render_points_diff_color(name, pts_list, color_list, save_img = True, show_img=True, result_dir=None):
     vis = o3d.visualization.Visualizer()
     vis.create_window(window_name=name, width=512, height=512, left=50, top=25)
     opt = vis.get_render_option()
@@ -1069,3 +1069,58 @@ def render_points_diff_color(name, pts_list, color_list, save_img = True, show_i
     if save_img and result_dir:
         vis.capture_screen_image(os.path.join(result_dir, name + '.png'), False)
     vis.destroy_window()
+
+count = [0]
+
+
+def rotate_view(vis):
+    ctr = vis.get_view_control()
+    ctr.set_zoom(2)
+    ctr.rotate(8.0, 0) # 调整值的大小可以调整旋转速度
+    if 1 < count[0] < 525:
+        vis.capture_screen_image(f'/data1/cxx/nrm_pcd/{count[0]}.png', False)
+    count[0] += 1
+    return False
+
+
+def viz_pts_with_rotation(name, pts_list, color_list, show_coordinate=True):
+    vis = o3d.visualization.Visualizer()
+    vis.create_window(window_name=name, width=512, height=512, left=50, top=25)
+    opt = vis.get_render_option()
+    opt.show_coordinate_frame = show_coordinate
+    assert len(pts_list) == len(color_list)
+
+    pcds = []
+    for index in range(len(pts_list)):
+        pcd = o3d.geometry.PointCloud()
+        pts = pts_list[index]
+        color = color_list[index]
+        if np.any(color > 1.0):
+            color = color.astype(float)/255
+        color = np.tile(color, (pts.shape[0], 1))  # 将color扩大为 (pts.shape[0], 1)
+        pcd.points = o3d.utility.Vector3dVector(pts)
+        pcd.colors = o3d.utility.Vector3dVector(color)
+        # 调整pts角度
+        R = pcd.get_rotation_matrix_from_xyz((-0.15 * np.pi, 0, 0 * np.pi))
+        pcd = pcd.rotate(R, center=(0, 0, 0))
+        # define rotation
+        # if index == len(pts_list) - 1:
+        o3d.visualization.draw_geometries_with_animation_callback([pcd], rotate_view)
+
+        pcds.append(pcd)
+        vis.add_geometry(pcd)
+
+
+    o3d.visualization.draw_geometries_with_animation_callback(pcds, rotate_view)
+
+    ctr = vis.get_view_control()
+    ctr.rotate(-300.0, 150.0)
+    if name == 'camera':
+        ctr.translate(20.0, -20.0)  # (horizontal right +, vertical down +)
+    if name == 'laptop':
+        ctr.translate(25.0, -60.0)
+
+    vis.run()
+    vis.destroy_window()
+    count[0] = 0
+

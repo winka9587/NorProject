@@ -3,6 +3,7 @@
   <component name="Encoding">
     <file url="file://$PROJECT_DIR$/configs/base_config.py" charset="GBK" />
     <file url="file://$PROJECT_DIR$/configs/base_config.yml" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/extract_2D_kp.py" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/network/data/dataset.py" charset="GBK" />
     <file url="file://$PROJECT_DIR$/network/data/dataset_process.py" charset="GBK" />
     <file url="PROJECT" charset="GBK" />
