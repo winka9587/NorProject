@@ -285,7 +285,11 @@ CD距离：每一个点，计算另一个点云中与他最近的点；反之也一样。
 
 另一种思路，是否可以用transformer来做？ (Q法向+K法向) V第一帧mask -> 第二帧mask
 
-
 法向缺失的部分存疑，可能是物体的一部分，也可能不是。需要额外处理
 
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-02-normal_out_0666__k=6_dist=50000_diff=20_scale_1.0.png' width="100%" >
+
+to do：
+
+先生成一个数据集
+用pointnet2来分割，如果不行用3D-GCN（参考SAR-Net）
