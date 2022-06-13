@@ -79,15 +79,22 @@ class Conv_surface(nn.Module):
         """
         Return vertices with local feature: (bs, vertice_num, kernel_num)
         """
+        t2 = Timer(True)
         bs, vertice_num, neighbor_num = neighbor_index.size()
         neighbor_direction_norm = get_neighbor_direction_norm(vertices, neighbor_index)  # Float64
+        t2.tick('conv :get neighbor direction')
         support_direction_norm = F.normalize(self.directions, dim=0)  # (3, s * k)  # Float32
+        t2.tick('conv :normalize')
         theta = neighbor_direction_norm @ support_direction_norm  # (bs, vertice_num, neighbor_num, s*k)
-
+        t2.tick('conv :matrix multiply')
         theta = self.relu(theta)
+        t2.tick('conv :relu')
         theta = theta.contiguous().view(bs, vertice_num, neighbor_num, self.support_num, self.kernel_num)
+        t2.tick('conv :view')
         theta = torch.max(theta, dim=2)[0]  # (bs, vertice_num, support_num, kernel_num)
+        t2.tick('conv :max')
         feature = torch.sum(theta, dim=2)  # (bs, vertice_num, kernel_num)
+        t2.tick('conv :sum')
         return feature
 
 

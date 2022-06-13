@@ -383,3 +383,43 @@ SAR-Net补充材料中关于3D-GCN的设置：
 <p style="color:deepskyblue;">
 值得一提，3D-GCN中提到了在提取特征时可以选择坐标，法向，RGB等。在分割时能否用xyz+normal？
 </p>
+
+
+### 目前的失败例子
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-13-c6J1Tr.png' width="70%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-13-xSiOJY.png' width="70%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-13-aAGYof.png' width="70%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-13-OwtaNS.png' width="70%" >
+
+
+考虑原因可能是mask裁剪不干净导致拖尾对学习产生了影响，另外，有没有什么办法能够可视化对应关系？
+
+可视化一下训练时的对应矩阵结果如何
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-13-Ba5KRr.png' width="100%" >
+
+破案：最终训练出的对应举证并非one_hot的形式，因此得到pts1点基本会受到所有pts2点的影响，因此会像是求了平均值一样
+解决方案：增大熵loss,乘以1000(entropy loss to encourage peaked distribution)
+
+问题：增大loss后，熵loss甚至变为0，意味着所有的对应矩阵的每一行都被约束成了one-hot向量，
+但是因为loss中并没有要求所有的one-hot互斥，所以导致所有的one-hot向量都集中在了同一点。
+即所有的pts1中的点都映射到了pts2上的同一个点。
+
+应该是熵loss太大导致的，1.尝试将其减小。 2.能否设置loss约束one-hot向量之间互斥？
+
+似乎不是熵loss的问题，即便权重是1，当loss收敛时，得到的依然是所有点映射到一个点
+
+1.现在尝试将互逆loss也降低，或者将互逆loss删除试一试。（No，不加互逆loss依然会映射到一个点，
+加上反而还是一条线）
+2.然后就是约束各行的one-hot互斥（现在的熵loss只有水平约束？）， 或者说映射到同一个点的点有数量限制，被映射后将这个点删除掉。
+3.给一个对应矩阵的初值？
+
+<p style="color:deepskyblue;">
+一个疑问：为什么集中于一点反而loss会小？这样岂不是与corr_loss的目的背道而驰了？
+
+计算gt的corr_loss来找找有什么问题
+</p>

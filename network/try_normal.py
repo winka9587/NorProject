@@ -73,7 +73,9 @@ def train(opt):
     #     trainer.load_state_dict(torch.load(resume_model))
 
     # 3dgcn 模型
-    model = GCN3D(class_num=2, support_num=5, neighbor_num=5)
+    # model = GCN3D(class_num=2, support_num=3, neighbor_num=3)
+    # Pointnet模型
+    model = FBSeg(k=5)
 
     for epoch in range(opt.start_epoch, opt.max_epoch + 1):
         print(f'epoch:{epoch}')

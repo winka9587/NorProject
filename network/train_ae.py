@@ -338,8 +338,8 @@ def train(opt):
     for epoch in tqdm(range(opt.start_epoch, opt.max_epoch + 1), desc='Epoch:', position=0, leave=True):
         for i, data in enumerate(tqdm(train_dataloader, desc='training:', position=0, leave=True)):
             # 测试eval用
-            if i == 0:
-                break
+            # if i == 0:
+            #     break
             trainer.set_data(data)
             trainer.update()
 
@@ -403,6 +403,7 @@ def train(opt):
                     predicted_pose12 = pose_fit(points_1, assigned_points)  # 总是返回None是为什么？？？
                     points_1_RT = np.matmul(predicted_pose12['rotation'], points_1.transpose()).transpose() * predicted_pose12[
                         'scale'] + predicted_pose12['translation'].transpose()
+
                     render_points_diff_color('pose_fit pts1:green pts2:red', [points_1_RT, points_2],
                                              pts_colors, save_img=False,
                                              show_img=True)

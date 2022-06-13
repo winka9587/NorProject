@@ -3,7 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from .nn_distance.chamfer_loss import ChamferLoss
-
+from network.lib.utils import render_points_diff_color
 
 # SPD 的 loss
 class Loss(nn.Module):
@@ -57,7 +57,11 @@ class Loss(nn.Module):
         # pts1to2_sR = pts1to2_R * pose12_gt['scale'].view((-1, 1, 1))
         # pts1to2_sRt = pts1to2_sR + pose12_gt['translation'].transpose(1, 2).squeeze(-1)
         # pts1to2_sRt = pts1to2_sRt.transpose(-1, -2)
+
+        # gt
         points_1to2_newMethod = self.multi_pose_with_pts(sRt, points_1)
+        # problem: diff是否满足位移不变性？是否应该除以尺寸？
+        # 是否应该用ChamferDistance代替直接做差？不，CD无法评估对应点的误差
         diff = torch.abs(points_1_in_2 - points_1to2_newMethod)  # (bs, n_pts, 3)
 
         less = torch.pow(diff, 2) / (2.0 * self.threshold)
@@ -65,11 +69,18 @@ class Loss(nn.Module):
         corr_loss = torch.where(diff > self.threshold, higher, less)  # (idx0, idx1)
         corr_loss = torch.mean(torch.sum(corr_loss, dim=2))  # 对每个对应矩阵的行求和,然后对每行的和求平均值
         corr_loss = self.corr_wt * corr_loss
+
         return corr_loss
 
     def get_RegularizationLoss(self, assign_mat, soft_assign):
         log_assign = F.log_softmax(assign_mat, dim=2)
         entropy_loss = torch.mean(-torch.sum(soft_assign * log_assign, 2))
+        entropy_loss = self.entropy_wt * entropy_loss
+        return entropy_loss
+
+    def get_RegularizationLoss_v(self, assign_mat, soft_assign):
+        log_assign = F.log_softmax(assign_mat, dim=1)
+        entropy_loss = torch.mean(-torch.sum(soft_assign * log_assign, 1))
         entropy_loss = self.entropy_wt * entropy_loss
         return entropy_loss
 
@@ -133,23 +144,58 @@ class Loss(nn.Module):
         entropy_loss_1 = self.get_RegularizationLoss(assign_mat_1, soft_assign_1)
         entropy_loss_2 = self.get_RegularizationLoss(assign_mat_2, soft_assign_2)
 
+        entropy_loss_1v = self.get_RegularizationLoss_v(assign_mat_1, soft_assign_1)
+        entropy_loss_2v = self.get_RegularizationLoss_v(assign_mat_2, soft_assign_2)
+
         # 3. A1和A2应当互逆
         reciprocal_loss = self.get_cos_sim_loss(assign_mat_1, assign_mat_2)
 
-        total_loss = corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + 10.0*reciprocal_loss
-        return total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss
+        # loss weight
+        corr_loss_1 = 1.0 * corr_loss_1
+        corr_loss_2 = 1.0 * corr_loss_2
+        entropy_loss_1 = 1.0 * entropy_loss_1
+        entropy_loss_2 = 1.0 * entropy_loss_2
+        entropy_loss_1v = 1.0 * entropy_loss_1v
+        entropy_loss_2v = 1.0 * entropy_loss_2v
+        reciprocal_loss = 1.0 * reciprocal_loss
+
+        total_loss = corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss + entropy_loss_1v + entropy_loss_2v
+
+        if corr_loss_1 < 0.15:
+            soft_assign_1 = soft_assign_1.type(torch.float64)
+            points_1 = points_1.type(torch.float64)
+            points_2 = points_2.type(torch.float64)
+            points_1_in_2 = torch.bmm(soft_assign_1, points_2)
+            assigned_points = points_1_in_2[0].cpu().detach().numpy()
+            points_1 = points_1[0].cpu().detach().numpy()
+            points_2 = points_2[0].cpu().detach().numpy()
+            color_red = np.array([255, 0, 0])
+            color_green = np.array([0, 255, 0])
+            color_blue = np.array([0, 0, 255])
+            pts_colors = [color_green, color_red]
+            render_points_diff_color('points_1:green points_2:red', [points_1, points_2],
+                                     pts_colors, save_img=False,
+                                     show_img=True)
+            render_points_diff_color('points_1 in 2:green points_2:red', [assigned_points, points_2],
+                                     pts_colors, save_img=False,
+                                     show_img=True)
+            print(soft_assign_1)
+
+        return total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v
 
     def forward(self, points_assign_mat_list, pose12_gt):
         total_loss = 0.0
         for frame_pair in points_assign_mat_list:
             points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2 = frame_pair
-            frame_total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss = \
+            frame_total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v = \
                 self.get_total_loss_2_frame(points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, pose12_gt)
             print("corr_loss_1:    {0},\n"
                   "                {1}\n"
                   "entropy_loss:   {2},\n"
                   "                {3}\n"
-                  "reciprocal_loss:{4}\n".format(corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss))
+                  "entropy_l  v:   {5},\n"
+                  "                {6}\n"
+                  "reciprocal_loss:{4}\n".format(corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v))
             total_loss += 1.0 * frame_total_loss
         return total_loss
 

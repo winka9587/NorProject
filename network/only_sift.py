@@ -420,7 +420,7 @@ class SIFT_Track(nn.Module):
         color_bs_zero_pad = color_bs_zero_pad.type(torch.float32)
         # SGPA中,这里的图像已经被裁剪为192x192了
         # 之后可以测试一下
-        # 这里绝对是可以继续优化的，因为后面choose会将没用的筛选掉，所以这里会计算很多没用CNN
+        # problem: 这里绝对是可以继续优化的，因为后面choose会将没用的筛选掉，所以这里会计算很多没用CNN
         # (bs, 3, 640, 480) -> (bs, 32, 640, 480)
         out_img = self.psp(color_bs_zero_pad.permute(0, 3, 1, 2))
         di = out_img.size()[1]  # 特征维度 32
@@ -485,6 +485,8 @@ class SIFT_Track(nn.Module):
             timer_extract_feat.tick('extract feature 1 end')
 
             print('extracting feature 2  ...')
+            # 测试用，使用第二帧的gt_mask，如果要测试前一阵的的padding mask，删除这一行
+            mask_bs_next = self.feed_dict[i]['meta']['pre_fetched']['mask']
             inst_local_2, inst_global_2, _, points_bs_2 = self.extract_3D_kp(next_frame, mask_bs_next)
             timer_extract_feat.tick('extract feature 2 end')
 
