@@ -572,6 +572,9 @@ class SIFT_Track(nn.Module):
 
     def test(self, data):
         self.eval()
+        t = Timer(True)
         self.set_data(data)
+        t.tick('[test]: set data end')
         points_assign_mat, pose12 = self.forward()
+        t.tick('[test]: forward  end')
         return points_assign_mat, pose12

@@ -2,7 +2,6 @@ import cv2
 import torch
 import numpy as np
 
-
 def extract_sift_kp_from_RGB(img_color_cropped, opt=None):
     if isinstance(img_color_cropped, torch.Tensor):
         img_color_cropped = img_color_cropped.clone().detach().cpu().numpy()
@@ -10,6 +9,15 @@ def extract_sift_kp_from_RGB(img_color_cropped, opt=None):
     sift = cv2.SIFT_create()
     kp_xys, des = sift.detectAndCompute(img_gray, None)
     color_sift = cv2.drawKeypoints(img_gray, kp_xys, img_color_cropped, (0, 255, 0), flags=cv2.DrawMatchesFlags_DRAW_RICH_KEYPOINTS)
+    # color_sift = None
+    return color_sift, kp_xys, des
+
+
+def extract_sift_kp_from_gray(img_gray, opt=None):
+    sift = cv2.SIFT_create()
+    kp_xys, des = sift.detectAndCompute(img_gray, None)
+    # color_sift = cv2.drawKeypoints(img_gray, kp_xys, img_color_cropped, (0, 255, 0), flags=cv2.DrawMatchesFlags_DRAW_RICH_KEYPOINTS)
+    color_sift = None
     return color_sift, kp_xys, des
 
 

@@ -17,6 +17,7 @@ from lib.nn_distance.chamfer_loss import ChamferLoss
 from utils import Timer
 parser = argparse.ArgumentParser()
 # lr_policy
+from model_3dgcn import GCN3D
 
 parser.add_argument('--lr_policy', type=str, default='step', help='')
 parser.add_argument('--lr_step_size', type=str, default='step', help='')
@@ -26,7 +27,6 @@ parser.add_argument('--learning_rate', type=float, default=0.0001, help='initial
 parser.add_argument('--start_epoch', type=int, default=1, help='which epoch to start')
 parser.add_argument('--max_epoch', type=int, default=15, help='max number of epochs to train')
 parser.add_argument('--result_dir', type=str, default='results/Real', help='directory to save train results')
-
 
 def train(opt):
     dataset_path = '/data1/cxx/Lab_work/dataset' # 数据集路径,格式like:CAPTRA
@@ -66,11 +66,15 @@ def train(opt):
     resume_model = ''
     # resume_model = 'results/real/model_cat1_15.pth'
 
-    trainer = SIFT_Track_normal_viz(device=device, real=('real' in mode), mode='train', opt=opt)
-    # trainer = torch.nn.DataParallel(trainer, device_ids)
-    trainer.cuda()
-    if resume_model != '':
-        trainer.load_state_dict(torch.load(resume_model))
+    # trainer = SIFT_Track_normal_viz(device=device, real=('real' in mode), mode='train', opt=opt)
+    # # trainer = torch.nn.DataParallel(trainer, device_ids)
+    # trainer.cuda()
+    # if resume_model != '':
+    #     trainer.load_state_dict(torch.load(resume_model))
+
+    # 3dgcn 模型
+    model = GCN3D(class_num=2, support_num=5, neighbor_num=5)
+
     for epoch in range(opt.start_epoch, opt.max_epoch + 1):
         print(f'epoch:{epoch}')
         for i, data in enumerate(train_dataloader):
@@ -121,9 +125,17 @@ def train(opt):
                 cv2.imshow('nrm1', nrm1_viz)
                 cv2.imshow('nrm2', nrm2_viz)
                 cv2.waitKey(0)
+            pcd1 = data[0]['points'][0, :, 0:1024].unsqueeze(0).transpose(2, 1)
+            pcd2 = data[1]['points'][0, :, 0:1024].unsqueeze(0).transpose(2, 1)
 
-
-
+            onehot = torch.zeros(2)
+            onehot[0] = 1
+            onehot = onehot.unsqueeze(0)
+            t1 = Timer(True)
+            model(pcd1.float(), onehot)
+            t1.tick('3D-GCN forward end')
+            model(pcd2.float(), onehot)
+            t1.tick('3D-GCN forward end')
             nrm1 = data[0]['meta']['pre_fetched']['nrm'][0]  # (480, 640, 3)
             nrm2 = data[1]['meta']['pre_fetched']['nrm'][0]
             nrm3 = data[1]['meta']['pre_fetched']['nrm'][9]

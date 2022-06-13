@@ -338,8 +338,8 @@ def train(opt):
     for epoch in tqdm(range(opt.start_epoch, opt.max_epoch + 1), desc='Epoch:', position=0, leave=True):
         for i, data in enumerate(tqdm(train_dataloader, desc='training:', position=0, leave=True)):
             # 测试eval用
-            # if i == 0:
-            #     break
+            if i == 0:
+                break
             trainer.set_data(data)
             trainer.update()
 
@@ -360,7 +360,9 @@ def train(opt):
         print('train end')
         test_loss = {}
         for i, data in enumerate(tqdm(test_dataloader, desc='testing', position=0, leave=True)):
+            t2 = Timer(True)
             points_assign_mat_list, pose12 = trainer.test(data)
+            t2.tick('predict end')
             # 评估位姿
             # points1和points2计算位姿
             total_loss = 0.0

@@ -192,6 +192,32 @@ point_into_surface = False
 我的方法能不能在整个过程中重建模型？（例如在bundle的过程中）重建的模型是否能够反过来为流程提供帮助？
 （例如将重建的模型投影来得到粗mask）
 
+### padding问题
+
+虽然有一篇论文验证了padding不会影响CNN结果，但它并非不会影响速度。同时，
+padding也会影响计算normal map的速度。
+
+<div class="img_group" style="text-align:center;">
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-09-norm.PNG' width="100%" >
+<p  style="margin-top: 0">裁剪后的深度图</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-09-norm2.PNG' width="100%" >
+<p style="margin-top: 0">生成的normal map</p>
+</div>
+</div>
+
+compute normal map (cropped) 0.004948854446411133
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-09-norm_padding.PNG' width="100%" >
+
+compute normal map (padding) 0.023913860321044922
+
+可以发现padding的计算时间明显要比cropped长
+
+### Now
+
 考虑上面这些因素，然后考虑一下具体怎么做：
 
 1. 计算normal图，然后用RGB特征匹配对normal图进行分割
@@ -274,6 +300,11 @@ CD距离：每一个点，计算另一个点云中与他最近的点；反之也一样。
 但是有问题，下图是0000和0010的法向点云，但是0010的点云是使用0000的mask_add裁剪的，但其计算出的CD loss的值却是0.003994
 0000和0001的gt_mask裁剪的法向点云的cd loss都是0.004569，只是因为点更多，导致只要点的数量够多，就有可能出现接近的法向，因为法向一共就那么几个方向。
 
+<p style="color:cornflowerblue">
+一个想法：能不能将normal_pcd和pcd结合起来一起考虑？最终得到的点云既要在欧式空间满足和前一帧点云形状相似，
+又要在法向空间满足normal_pcd的分布相似。
+</p>
+
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-02-TcJ0JE.png' width="60%" >
 
 那么，使用法向来分割的思路是否可行？
@@ -292,4 +323,63 @@ CD距离：每一个点，计算另一个点云中与他最近的点；反之也一样。
 to do：
 
 先生成一个数据集
-用pointnet2来分割，如果不行用3D-GCN（参考SAR-Net）
+用pointnet2来分割（太简单了，不用），如果不行用3D-GCN（参考SAR-Net）
+
+SAR-Net在训练的时候，输入的只有一张mask和深度。 上下两分支是为了处理不同的目标检测方法。
+因为有的目标检测方法是得到像素点，有的是得到bbox。
+与SAR-Net中的3D-GCN不同的是，因为我是跟踪任务，所以我是有前一帧的mask的。
+<p style="color: deepskyblue">
+思路：使用目标检测算法，然后用3D-GCN得到点云。（No）
+搜索区域本就不大，可以直接当做bbox的检测结果来。修改3D-GCN，加上前一帧的信息来得到当前帧的点云
+</p>
+顺带，可以先用normal map的2D颜色分布来快速定位当前帧物体点云在图像中可能的位置，找其他的2D方法
+（sift耗时太长了）
+
+> extract kp end 0.019520282745361328
+>
+> matcher end 0.0
+>
+> match end 0.0009765625
+
+3D-GCN的速度问题，先看提取临近点操作，这个应该是除卷积外比较耗时的操作，在3dgcn中有大概3次
+
+> 从4096个点中提取50个临近点
+>
+> get Neighbor 0.06122946739196777
+>
+> get Neighbor 0.05437242984771729
+> 
+> 1024个点提取10个临近点,速度还可以接受，但奇怪的是两组不同点云时间差距很大
+> 
+> get Neighbor 0.004289388656616211
+> 
+> get Neighbor 0.0013625621795654297
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-06-CusnEP.png' width="100%" >
+
+
+SAR-Net补充材料中关于3D-GCN的设置：
+
+分割任务的3D-GCN速度测试 两组不同的1024个点的点云分别测试。临近点找20个，最终分割类别数为2
+
+> get Neighbor 0.23159170150756836
+> 
+> get Neighbor 0.2432103157043457
+
+临近点找10个，最终分割类别数为2
+
+> get Neighbor 0.0960237979888916
+> 
+> get Neighbor 0.1004629135131836
+
+临近点找5个，最终分割类别数为2
+
+> get Neighbor 0.030435562133789062
+> 
+> get Neighbor 0.05418968200683594
+> 
+即便只有5个临近点，耗时也不太能接受。需要减少网络层数？
+
+<p style="color:deepskyblue;">
+值得一提，3D-GCN中提到了在提取特征时可以选择坐标，法向，RGB等。在分割时能否用xyz+normal？
+</p>
