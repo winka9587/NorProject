@@ -22,7 +22,13 @@ class Loss(nn.Module):
     # 问题来了, 之前求对应矩阵，是因为变形后的prior与gt点云nocs都是出于NOCS空间下，而且没有sRT的影响，因此两者理论上应该是重合的，
     # 而两帧的点云points_1和points_2是有点云影响的。
     # 难道要重建？
-    def get_corr_loss(self, soft_assign_1, points_1, points_2, sRt):
+    def get_corr_loss_past(self, soft_assign_1, points_1, points_2, sRt):
+        """
+                Args:
+                    soft_assign_1: bs x n_pts x nv
+                    points_1: bs x nv x 3
+                    points_2: bs x nv x 3
+                """
         soft_assign_1 = soft_assign_1.type(torch.float64)
         points_1 = points_1.type(torch.float64)
         points_2 = points_2.type(torch.float64)
@@ -30,12 +36,6 @@ class Loss(nn.Module):
         # pose12_gt['rotation'] = pose12_gt['rotation'].type(torch.float64)
         # pose12_gt['translation'] = pose12_gt['translation'].type(torch.float64)
         sRt = sRt.type(torch.float64)
-        """
-        Args:
-            soft_assign_1: bs x n_pts x nv
-            points_1: bs x nv x 3
-            points_2: bs x nv x 3
-        """
         # smooth L1 loss for correspondences
         # 对对应矩阵A的最后一维,缩放到(0,1)并使和为1
         # bs x n_pts x nv
@@ -47,8 +47,6 @@ class Loss(nn.Module):
         # 2. 根据gt RT 将points_1变换到points_2，求两者对应关系
         # 注意【nocs与points是一一对应的，可以直接相减】
         # 可以比较一下这两种方法计算出的loss的值
-
-
         # diff = torch.abs(points_1_in_2 - points_2)  # (bs, n_pts, 3)
 
         # 使用pose12_gt将point1变换到point2位置处
@@ -63,6 +61,25 @@ class Loss(nn.Module):
         # problem: diff是否满足位移不变性？是否应该除以尺寸？
         # 是否应该用ChamferDistance代替直接做差？不，CD无法评估对应点的误差
         diff = torch.abs(points_1_in_2 - points_1to2_newMethod)  # (bs, n_pts, 3)
+
+        less = torch.pow(diff, 2) / (2.0 * self.threshold)
+        higher = diff - self.threshold / 2.0
+        corr_loss = torch.where(diff > self.threshold, higher, less)  # (idx0, idx1)
+        corr_loss = torch.mean(torch.sum(corr_loss, dim=2))  # 对每个对应矩阵的行求和,然后对每行的和求平均值
+        corr_loss = self.corr_wt * corr_loss
+
+        return corr_loss
+
+    def get_corr_loss(self, points_1_in_2, points_1to2_gt):
+        """
+                Args:
+                    soft_assign_1: bs x n_pts x nv
+                    points_1: bs x nv x 3
+                    points_2: bs x nv x 3
+                """
+        # problem: diff是否满足位移不变性？是否应该除以尺寸？
+        # 是否应该用ChamferDistance代替直接做差？不，CD无法评估对应点的误差
+        diff = torch.abs(points_1_in_2 - points_1to2_gt)  # (bs, n_pts, 3)
 
         less = torch.pow(diff, 2) / (2.0 * self.threshold)
         higher = diff - self.threshold / 2.0
@@ -129,15 +146,32 @@ class Loss(nn.Module):
             deltas: bs x nv x 3
             prior: bs x nv x 3
         """
-        # 1. Correspondence Loss
         soft_assign_1 = F.softmax(assign_mat_1, dim=2)
         soft_assign_2 = F.softmax(assign_mat_2, dim=2)
 
         sRt12_gt = self.pose_dict_RT(pose12_gt)
         sRt21_gt = self.pose_inverse(sRt12_gt)  # 每个batch对应的两个矩阵是互逆的
 
-        corr_loss_1 = self.get_corr_loss(soft_assign_1, points_1, points_2, sRt12_gt)
-        corr_loss_2 = self.get_corr_loss(soft_assign_2, points_2, points_1, sRt21_gt)
+        # 投影后点云与gt点云
+        soft_assign_1 = soft_assign_1.type(torch.float64)
+        soft_assign_2 = soft_assign_2.type(torch.float64)
+        points_1 = points_1.type(torch.float64)
+        points_2 = points_2.type(torch.float64)
+        sRt12_gt = sRt12_gt.type(torch.float64)
+        sRt21_gt = sRt21_gt.type(torch.float64)
+        points_1_in_2 = torch.bmm(soft_assign_1, points_2)  # (bs, n_pts, 3) points_1_in_2为points_1在points_2坐标系下的映射
+        points_2_in_1 = torch.bmm(soft_assign_2, points_1)
+        # gt
+        points_1to2_gt = self.multi_pose_with_pts(sRt12_gt, points_1)
+        points_2to1_gt = self.multi_pose_with_pts(sRt21_gt, points_2)
+
+        # 0. CD loss 能否约束形状？
+        cd_loss1, _, _ = self.chamferloss(points_1to2_gt.type(torch.float32).contiguous(), points_1_in_2.type(torch.float32))
+        cd_loss2, _, _ = self.chamferloss(points_2to1_gt.type(torch.float32).contiguous(), points_2_in_1.type(torch.float32))
+        # 1. Correspondence Loss
+
+        corr_loss_1 = self.get_corr_loss(points_1_in_2, points_1to2_gt)
+        corr_loss_2 = self.get_corr_loss(points_2_in_1, points_2to1_gt)
 
         # 2. Regularization Loss
         # entropy loss to encourage peaked distribution
@@ -159,9 +193,11 @@ class Loss(nn.Module):
         entropy_loss_2v = 1.0 * entropy_loss_2v
         reciprocal_loss = 1.0 * reciprocal_loss
 
-        total_loss = corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss + entropy_loss_1v + entropy_loss_2v
+        total_loss = cd_loss1 + cd_loss2 + corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss + entropy_loss_1v + entropy_loss_2v
 
-        if corr_loss_1 < 0.15:
+        if corr_loss_1 < 0.010:
+            I_matrix = torch.eye(1024).unsqueeze(0).repeat(10, 1, 1)
+            I_gt = torch.eye(4).unsqueeze(0).repeat(10, 1, 1)
             soft_assign_1 = soft_assign_1.type(torch.float64)
             points_1 = points_1.type(torch.float64)
             points_2 = points_2.type(torch.float64)
@@ -181,21 +217,23 @@ class Loss(nn.Module):
                                      show_img=True)
             print(soft_assign_1)
 
-        return total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v
+        return total_loss, cd_loss1, cd_loss2, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v
 
     def forward(self, points_assign_mat_list, pose12_gt):
         total_loss = 0.0
         for frame_pair in points_assign_mat_list:
             points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2 = frame_pair
-            frame_total_loss, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v = \
+            frame_total_loss, cd_loss1, cd_loss2, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v = \
                 self.get_total_loss_2_frame(points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, pose12_gt)
-            print("corr_loss_1:    {0},\n"
-                  "                {1}\n"
+            print("cd_loss_1:      {7},\n"
+                  "        2       {8}\n"
+                  "corr_loss_1:    {0},\n"
+                  "          2     {1}\n"
                   "entropy_loss:   {2},\n"
                   "                {3}\n"
                   "entropy_l  v:   {5},\n"
                   "                {6}\n"
-                  "reciprocal_loss:{4}\n".format(corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v))
+                  "reciprocal_loss:{4}\n".format(corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v, cd_loss1, cd_loss2))
             total_loss += 1.0 * frame_total_loss
         return total_loss
 

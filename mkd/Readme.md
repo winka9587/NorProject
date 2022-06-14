@@ -423,3 +423,19 @@ SAR-Net补充材料中关于3D-GCN的设置：
 
 计算gt的corr_loss来找找有什么问题
 </p>
+
+如何让模型能够有一个输出的初值？例如对应点先找最近的点。
+
+### 测试损失函数corr_loss
+sRt12_gt是gt位姿变换，能够将points_1的点通过刚体变换变到points2的位置。因此变换后的点与points_1的点还是有对应关系的。
+因此可以与对应矩阵soft_assign_1映射后的点做差来计算误差。
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-14-qiMmR5.png' width="100%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-14-KwU7Q9.png' width="70%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-14-XQ6Cez.png' width="70%" >
+
+为什么集中于一小部分的映射结果能比原点云的误差更小？
+
+加CD loss，约束形状。CD loss与位移有关？（可以归一化后再计算loss）
