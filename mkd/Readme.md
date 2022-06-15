@@ -439,3 +439,34 @@ sRt12_gtÊÇgtÎ»×Ë±ä»»£¬ÄÜ¹»½«points_1µÄµãÍ¨¹ý¸ÕÌå±ä»»±äµ½points2µÄÎ»ÖÃ¡£Òò´Ë±ä»»º
 ÎªÊ²Ã´¼¯ÖÐÓÚÒ»Ð¡²¿·ÖµÄÓ³Éä½á¹ûÄÜ±ÈÔ­µãÔÆµÄÎó²î¸üÐ¡£¿
 
 ¼ÓCD loss£¬Ô¼ÊøÐÎ×´¡£CD lossÓëÎ»ÒÆÓÐ¹Ø£¿£¨¿ÉÒÔ¹éÒ»»¯ºóÔÙ¼ÆËãloss£©
+
+ÒÀ¿¿ÖÜÎ§ÌØÕ÷Ö±½ÓÈ¥Ô¤²â¶ÔÓ¦µãÊÇ·ñ¿ÉÐÐ£¿£¿ 
+
+¼ì²éÒ»ÏÂ²»Í¬ÌØÕ÷µÄÖµÓò£¬²»Í¬ÌØÕ÷concatÖ®Ç°ÊÇ·ñÐèÒª¹éÒ»»¯£¿
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-15-G4Sin9.png' width="100%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-15-f3J2Nu.png' width="100%" >
+
+
+
+
+
+
+<div class="img_group" style="text-align:center;">
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-15-ImzKxp.png' width="100%" >
+<p  style="margin-top: 0">SGPAµÄevalÖÐÊµÀýµãÔÆ</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-15-q2HLaS.png' width="100%" >
+<p style="margin-top: 0">¶ÔÓ¦¾ØÕó*ÊµÀýµãÔÆ</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-15-vYpLIr.png' width="100%" >
+<p style="margin-top: 0">SGPAµÄevalÖÐ¹Û²âµãÔÆ</p>
+</div>
+</div>
+
+ÉÏÍ¼ÖÐ£¬¶ÔÓ¦¾ØÕóÆð×÷ÓÃµÄ²¿·ÖÊÇµÚ1,2Í¼£¬ÒòÎªÒªÊÇµÄÊµÀýµãÔÆ£¨ÓÉprior+D±äÐÎµÃµ½µÄ£©±äÐÎ³É½Ó½ügtÄ£ÐÍ£¨²ÐÈ±£©µÄÑù×Ó
+

@@ -424,7 +424,7 @@ class SIFT_Track(nn.Module):
         # (bs, 3, 640, 480) -> (bs, 32, 640, 480)
         out_img = self.psp(color_bs_zero_pad.permute(0, 3, 1, 2))
         di = out_img.size()[1]  # 特征维度 32
-        emb = out_img.view(bs, di, -1)  # 将每张图像的特征变成每个像素点的
+        emb = out_img.view(bs, di, -1)  # 将一张图像的特征变成图像上每个像素点的
         timer.tick('get RGB feature CNN')
 
         # 对特征进行采样,采样n_pts个点
@@ -440,6 +440,7 @@ class SIFT_Track(nn.Module):
 
         # 至此已经得到了(bs, 64, 1024)的几何特征与(bs, 64, 1024)的颜色特征
         # 将两者拼接得到instance local特征
+        # 检查一下几何特征与颜色特征的值域
         inst_local = torch.cat((points_feat, emb), dim=1)   # bs x 128 x 1024
         inst_global = self.instance_global(inst_local)      # bs x 1024 x 1
         timer.tick('get RGB feature concat')
