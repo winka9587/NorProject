@@ -73,8 +73,8 @@ def add_border_bool_by_crop_pos(mask, crop_pos, kernel_size=10):  # enlarge the 
     else:
         output = mask.copy()
     h, w = mask.shape
-    output[max(0, crop_pos['y_min'] - kernel_size): min(h, crop_pos['y_max'] + kernel_size),
-            max(0, crop_pos['x_min'] - kernel_size): min(w, crop_pos['x_max'] + kernel_size)] = True
+    output[max(0, crop_pos['rmin'] - kernel_size): min(h, crop_pos['rmax'] + kernel_size),
+            max(0, crop_pos['cmin'] - kernel_size): min(w, crop_pos['cmax'] + kernel_size)] = True
     # print((255 - output).sum())
     return output
 
@@ -159,4 +159,34 @@ def cvt_torch(x, device):
     elif x is None:
         return None
 
+
+# get square image crop window pos
+def get_bbox(bbox):
+    y1, x1, y2, x2 = bbox
+    img_width = 480
+    img_length = 640
+    window_size = (max(y2-y1, x2-x1) // 40 + 1) * 40
+    window_size = min(window_size, 440)
+    center = [(y1 + y2) // 2, (x1 + x2) // 2]
+    rmin = center[0] - int(window_size / 2)
+    rmax = center[0] + int(window_size / 2)
+    cmin = center[1] - int(window_size / 2)
+    cmax = center[1] + int(window_size / 2)
+    if rmin < 0:
+        delt = -rmin
+        rmin = 0
+        rmax += delt
+    if cmin < 0:
+        delt = -cmin
+        cmin = 0
+        cmax += delt
+    if rmax > img_width:
+        delt = rmax - img_width
+        rmax = img_width
+        rmin -= delt
+    if cmax > img_length:
+        delt = cmax - img_length
+        cmax = img_length
+        cmin -= delt
+    return rmin, rmax, cmin, cmax
 
