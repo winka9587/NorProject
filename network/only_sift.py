@@ -24,6 +24,7 @@ import torchvision.transforms as transforms
 from lib.utils import render_points_diff_color
 
 from visualize import viz_multi_points_diff_color, viz_mask_bool
+import normalSpeed
 
 norm_color = transforms.Compose(
     [transforms.ToTensor(),
@@ -325,16 +326,11 @@ class SIFT_Track(nn.Module):
     def extract_3D_kp(self, frame, mask_bs):
         timer = Timer(True)
         # rgb                彩色图像               [bs, 3, h, w]
-        # dpt_nrm            图像:xyz+normal       [bs, 6, h, w], 3c xyz in meter + 3c normal map
-        # cld_rgb_nrm点云:    xyz+rgb+normal      [bs, 9, npts]
         # choose             应该是mask            [bs, 1, npts]
 
         # 输入color,normal,depth,mask,反投影，得到9通道的点云
         color_bs = frame['meta']['pre_fetched']['color']
         depth_bs = frame['meta']['pre_fetched']['depth']
-        nrm_bs = frame['meta']['pre_fetched']['nrm']
-
-
 
         timer.tick('extract idx from mask')
 
@@ -343,13 +339,13 @@ class SIFT_Track(nn.Module):
         mask_bs_next = mask_bs.clone()
         # img_bs = color_bs.clone()
         img_bs = []
+        choose_bs = []
         points_feat_bs = torch.tensor([]).cuda()  # 提取的几何特征
         points_bs = torch.tensor([]).cuda()  # (bs, 1024, 3)
         timer_1 = Timer(True)
         for batch_idx in range(bs):
             color = color_bs[batch_idx]
             depth = depth_bs[batch_idx]
-            nrm = nrm_bs[batch_idx]
             mask = mask_bs[batch_idx]
 
             # 先通过mask得到bbox，然后对所有图像进行裁剪
@@ -375,7 +371,7 @@ class SIFT_Track(nn.Module):
 
             # 从mask获得choose
             mask = np.logical_and(mask, depth > 0)
-            choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()[0]
+            choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()
             if len(choose) < 32:
                 print('available pixel less than 32, cant use this')
                 continue
@@ -389,18 +385,26 @@ class SIFT_Track(nn.Module):
 
 
             # 1.提取几何特征
-            # 根据mask,反投影得到观测点云
-            # points, idxs = backproject(depth, self.intrinsics, mask=mask_bs[batch_idx])
-            # CAPTRA 反投影得到点云
-            # points, idxs = backproject(depth, self.intrinsics)
-            # points = torch.from_numpy(points).cuda()
-            # points_rgb = color[idxs[0], idxs[1]].cuda()
-            # points_nrm = nrm[idxs[0], idxs[1]].cuda()
-            # pts_6d = torch.concat([points, points_rgb], dim=1)
-            # SPD反投影得到点云
 
-            # 弃用
-            # choose = choose.cpu().numpy()
+            # 计算normal map在 划分bbox之后
+            if 'real' in self.mode:
+                fx = 591.0125
+                fy = 590.16775
+            else:
+                fx = 577.5
+                fy = 577.5
+            k_size = 3
+            distance_threshold = 2000
+            difference_threshold = 20  # 周围的点深度距离超过10mm则不考虑
+            point_into_surface = False
+
+            depth_nor = depth.astype(np.uint16)
+            normals_map_out = normalSpeed.depth_normal(depth_nor, fx, fy, k_size, distance_threshold, difference_threshold,
+                                                       point_into_surface)
+            timer.tick('depth 2 normal_end')
+            nrm = normals_map_out
+
+
             depth_masked = depth[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]       # 对点云进行一个采样,采样n_pts个点
             xmap_masked = self.xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]     # 像素坐标u
             ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]     # 像素坐标v
@@ -414,7 +418,10 @@ class SIFT_Track(nn.Module):
             ratio = self.img_size / crop_w
             col_idx = choose % crop_w
             row_idx = choose // crop_w
-            choose = (np.floor(row_idx * ratio) * self.img_size + np.floor(col_idx * ratio)).astype(np.int64)
+            choose = (torch.floor(row_idx * ratio) * self.img_size + torch.floor(col_idx * ratio)).type(torch.int64)
+            # choose (1024, 1)
+
+            choose_bs.append(choose)
 
             # points_viz = points.copy()  # 测试反投影|(1)
             points = torch.from_numpy(np.transpose(points, (2, 0, 1))).cuda()  # points (1024, 3, 1) -> (1, 1024, 3)
@@ -445,7 +452,7 @@ class SIFT_Track(nn.Module):
             #                              pts_colors, save_img=False,
             #                              show_img=True)
 
-            points_rgb = color[ymap_masked, xmap_masked]
+            points_rgb = color[rmin:rmax, cmin:cmax][ymap_masked, xmap_masked]
             points_rgb = points_rgb.squeeze(1).transpose(1, 0).cuda()  # points_rgb (1024, 1, 3) -> (1, 1024, 3)
             points_nrm = nrm[ymap_masked, xmap_masked]
             points_nrm = points_nrm.squeeze(1).transpose(1, 0).cuda()  # points_nrm (1024, 1, 3) -> (1, 1024, 3)
@@ -484,13 +491,16 @@ class SIFT_Track(nn.Module):
         emb = out_img.view(bs, di, -1)  # 将一张图像的特征变成图像上每个像素点的
         timer.tick('get RGB feature CNN')
 
-
+        # choose_bs list 转 tensor
+        choose_bs = torch.stack(choose_bs, dim=0).cuda()  # convert list to tensor
+        choose_bs = choose_bs.type(torch.int64)
 
         # 弃用
         # 对特征进行采样,采样n_pts个点
         # choose_bs (bs, n_pts=1024, 1) -> (bs, n_dim=32, n_pts=1024)
         # choose_bs = choose_bs.transpose(1, 2).repeat(1, di, 1)
         # 根据choose提取对应点的特征
+        choose_bs = choose_bs.permute(0, 2, 1).repeat(1, di, 1)  # (bs=10, n_pts=1024, 1) -> (bs=10, di=32, n_pts=1024)
         emb = torch.gather(emb, 2, choose_bs).contiguous()
         # emb (bs, 64, n_pts)
         # emb (10, 64, 1024)
@@ -520,7 +530,6 @@ class SIFT_Track(nn.Module):
         init_pre_fetched = init_frame['meta']['pre_fetched']
         init_masks = init_pre_fetched['mask_add']
         init_colors = init_pre_fetched['color']
-        init_nrms = init_pre_fetched['nrm']
         batch_size = len(init_masks)
         init_crop_pos = []
 
@@ -535,9 +544,7 @@ class SIFT_Track(nn.Module):
             last_frame = self.feed_dict[i - 1]
             next_frame = self.feed_dict[1]
             last_colors = last_frame['meta']['pre_fetched']['color']
-            last_nrms = last_frame['meta']['pre_fetched']['nrm']
             next_colors = next_frame['meta']['pre_fetched']['color']
-            next_nrms = next_frame['meta']['pre_fetched']['nrm']
             # 提取两帧的3D关键点
             # 提取第一帧的关键点
             print('extracting feature 1  ...')

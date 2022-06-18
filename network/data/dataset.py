@@ -17,7 +17,7 @@ from captra_utils.utils_from_captra import load_depth
 import _pickle as cPickle
 from dataset_process import split_nocs_dataset, read_cloud, base_generate_data, shuffle, subtract_mean, add_corners
 from utils import add_border_bool, Timer
-import normalSpeed
+
 import random
 from copy import deepcopy
 
@@ -148,10 +148,12 @@ def generate_nocs_data(root_dset, mode, obj_category, instance, track_num, frame
         - right-handed: positive z look-at direction
     """
     timer = Timer(True)
-    normals_map_out = normalSpeed.depth_normal(depth_nor, fx, fy, k_size, distance_threshold, difference_threshold,
-                                               point_into_surface)
-    timer.tick('depth_normal_end')
-    full_data['pre_fetched']['nrm'] = normals_map_out
+    # 计算normal map在 划分bbox之后
+    # normals_map_out = normalSpeed.depth_normal(depth_nor, fx, fy, k_size, distance_threshold, difference_threshold,
+    #                                            point_into_surface)
+    # timer.tick('depth_normal_end')
+    # full_data['pre_fetched']['nrm'] = normals_map_out
+
     # try viz nrm
     # cv2.imshow(f"normal map of {depth_path}", normals_map_out)
     # cv2.waitKey(0)

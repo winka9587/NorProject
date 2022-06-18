@@ -216,6 +216,26 @@ compute normal map (padding) 0.023913860321044922
 
 ¿ÉÒÔ·¢ÏÖpaddingµÄ¼ÆËãÊ±¼äÃ÷ÏÔÒª±Ècropped³¤
 
+### ²Ã¼ôÉî¶ÈÍ¼ÊÇ·ñ»áÓ°ÏìnormalspeedÉú³ÉµÄ·¨ÏòÍ¼£¿
+
+Ô­Éî¶ÈÍ¼
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-18-CKKcNJ.png' width="70%" >
+
+ÍêÕûÉî¶ÈÍ¼Éú³ÉµÄ·¨ÏòÍ¼ nrm_full
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-18-EhGsgF.png' width="70%" >
+
+²Ã¼ôµÄÉî¶ÈÍ¼Éú³ÉµÄ·¨ÏòÍ¼ nrm_crop
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-18-YdmVLn.png' width="40%" >
+
+£¨ºÍÇ°ÃæµÄ·¨ÏòÍ¼²»Ò»ÑùÊÇÒòÎªÃ»×ö¿ÉÊÓ»¯´¦Àí£©½«nrm_full½øÐÐ²Ã¼ô£¬²Ã¼ôºóµÄnrm_fullÓënrm_crop×ö²î£¬µÃµ½ÏÂÍ¼¡£
+¿ÉÒÔ·¢ÏÖ£¬Ö»ÓÐÍ¼Ïñ±ßÔµÓÐ²îÒì£¬ÆäËû²¿·ÖÊÇÏàÍ¬µÄ¡£
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-18-mnvRvN.png' width="40%" >
+
+
 ### Now
 
 ¿¼ÂÇÉÏÃæÕâÐ©ÒòËØ£¬È»ºó¿¼ÂÇÒ»ÏÂ¾ßÌåÔõÃ´×ö£º
@@ -469,4 +489,3 @@ sRt12_gtÊÇgtÎ»×Ë±ä»»£¬ÄÜ¹»½«points_1µÄµãÍ¨¹ý¸ÕÌå±ä»»±äµ½points2µÄÎ»ÖÃ¡£Òò´Ë±ä»»º
 </div>
 
 ÉÏÍ¼ÖÐ£¬¶ÔÓ¦¾ØÕóÆð×÷ÓÃµÄ²¿·ÖÊÇµÚ1,2Í¼£¬ÒòÎªÒªÊÇµÄÊµÀýµãÔÆ£¨ÓÉprior+D±äÐÎµÃµ½µÄ£©±äÐÎ³É½Ó½ügtÄ£ÐÍ£¨²ÐÈ±£©µÄÑù×Ó
-
