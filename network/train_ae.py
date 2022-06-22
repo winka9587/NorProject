@@ -269,9 +269,11 @@ parser.add_argument('--lr_step_size', type=str, default='step', help='')
 parser.add_argument('--lr_gamma', type=str, default='step', help='')
 parser.add_argument('--optimizer', type=str, default='Adam', help='Adam or SGD')
 parser.add_argument('--learning_rate', type=float, default=0.0001, help='initial learning rate')
-parser.add_argument('--start_epoch', type=int, default=1, help='which epoch to start')
-parser.add_argument('--max_epoch', type=int, default=15, help='max number of epochs to train')
 parser.add_argument('--result_dir', type=str, default='results/Real', help='directory to save train results')
+parser.add_argument('--max_epoch', type=int, default=25, help='max number of epochs to train')
+parser.add_argument('--start_epoch', type=int, default=3, help='which epoch to start')
+# parser.add_argument('--resume_model', type=str, default='', help='load model')
+parser.add_argument('--resume_model', type=str, default='../results/Real/pst/model_cat1_02.pth', help='load model')
 
 # parser.add_argument('--dataset', type=str, default='CAMERA+Real', help='CAMERA or CAMERA+Real')
 # parser.add_argument('--data_dir', type=str, default='data', help='data directory')
@@ -327,14 +329,14 @@ def train(opt):
 
     emb_dim = 512
     num_points = 1024
-    resume_model = ''
-    # resume_model = 'results/real/model_cat1_15.pth'
+
 
     trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt)
     # trainer = torch.nn.DataParallel(trainer, device_ids)
     trainer.cuda()
-    if resume_model != '':
-        trainer.load_state_dict(torch.load(resume_model))
+    if opt.resume_model != '':
+        trainer.load_state_dict(torch.load(opt.resume_model))
+        print(f'load resume model from {opt.resume_model}')
     for epoch in tqdm(range(opt.start_epoch, opt.max_epoch + 1), desc='Epoch:', position=0, leave=True):
         for i, data in enumerate(tqdm(train_dataloader, desc='training:', position=0, leave=True)):
             # 测试eval用
@@ -358,75 +360,77 @@ def train(opt):
         model_save_path = os.path.join(os.path.abspath('..'), opt.result_dir)
         torch.save(trainer.state_dict(), '{0}/model_cat{1}_{2:02d}.pth'.format(model_save_path, obj_category, epoch))
         print('train end')
-        test_loss = {}
-        for i, data in enumerate(tqdm(test_dataloader, desc='testing', position=0, leave=True)):
-            t2 = Timer(True)
-            points_assign_mat_list, pose12 = trainer.test(data)
-            t2.tick('predict end')
-            # 评估位姿
-            # points1和points2计算位姿
-            total_loss = 0.0
-            for frame_pair_idx in range(len(points_assign_mat_list)):
-                frame_pair = points_assign_mat_list[frame_pair_idx]
-                points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2 = frame_pair
-                assign_matrix_bs_1 = F.softmax(assign_matrix_bs_1, dim=2)
-                assign_matrix_bs_2 = F.softmax(assign_matrix_bs_2, dim=2)
 
-                assigned_points_1in2_bs = torch.bmm(assign_matrix_bs_1, points_bs_2)  # pts1在2坐标系下的映射
-                # assigned_points_1in2_bs与point_bs_1计算位姿
-                for j in range(len(assigned_points_1in2_bs)):
-                    assigned_points = assigned_points_1in2_bs[j].cpu().detach().numpy()
-                    points_1 = points_bs_1[j].cpu().detach().numpy()
-                    points_2 = points_bs_2[j].cpu().detach().numpy()
-
-                    cv2.imshow('frame1 color', data[frame_pair_idx]['meta']['pre_fetched']['color'].numpy().squeeze(0))
-                    cv2.waitKey(0)
-                    cv2.imshow('frame2 color', data[frame_pair_idx + 1]['meta']['pre_fetched']['color'].numpy().squeeze(0))
-                    cv2.waitKey(0)
-
-                    color_red = np.array([255, 0, 0])
-                    color_green = np.array([0, 255, 0])
-                    color_blue = np.array([0, 0, 255])
-                    pts_colors = [color_green, color_red]
-                    points_1 = points_bs_1[j].cpu().detach().numpy()
-                    render_points_diff_color('points_1:green points_2:red', [points_1, points_2],
-                                             pts_colors, save_img=False,
-                                             show_img=True)
-                    render_points_diff_color('assigned_points:green points_1:red', [assigned_points, points_1],
-                                             pts_colors, save_img=False,
-                                             show_img=True)
-                    render_points_diff_color('assigned_points:green points_2:red', [assigned_points, points_2],
-                                             pts_colors, save_img=False,
-                                             show_img=True)
-                    # 测试
-                    # points_1和2拟合位姿，然后变换1
-                    predicted_pose12 = pose_fit(points_1, assigned_points)  # 总是返回None是为什么？？？
-                    points_1_RT = np.matmul(predicted_pose12['rotation'], points_1.transpose()).transpose() * predicted_pose12[
-                        'scale'] + predicted_pose12['translation'].transpose()
-
-                    render_points_diff_color('pose_fit pts1:green pts2:red', [points_1_RT, points_2],
-                                             pts_colors, save_img=False,
-                                             show_img=True)
-
-
-                    predicted_pose12 = pose_fit(points_2, points_2)  # 模型预测的位姿
-                    # 获得前后两帧的sRT
-                    # meta中的位姿nocs2camera是 get_gt_poses.py中的函数
-                    # get_image_pose(num_instances, mask, coord, depth, intrinsics):
-                    # 通过函数 pose = pose_fit(coord_pts, pts)获得的
-                    sRT1 = data[frame_pair_idx]['meta']['nocs2camera'][0]
-                    sRT2 = data[frame_pair_idx+1]['meta']['nocs2camera'][0]
-                    R12 = torch.mm(torch.inverse(sRT1['rotation'].squeeze(0)), sRT2['rotation'].squeeze(0))
-
-                    # 按理说 R12 应该与 gt meta中的points pose_fit得到的旋转一样
-                    gt_points1 = data[frame_pair_idx]['points'].cpu().squeeze(0).transpose(0, 1).numpy()
-                    gt_points2 = data[frame_pair_idx+1]['points'].cpu().squeeze(0).transpose(0, 1).numpy()
-                    gt_pose12 = pose_fit(gt_points1, gt_points2)
-
-
-                # 与gt进行比较
-
-            #return total_loss
+        # # 测试
+        # test_loss = {}
+        # for i, data in enumerate(tqdm(test_dataloader, desc='testing', position=0, leave=True)):
+        #     t2 = Timer(True)
+        #     points_assign_mat_list, pose12 = trainer.test(data)
+        #     t2.tick('predict end')
+        #     # 评估位姿
+        #     # points1和points2计算位姿
+        #     total_loss = 0.0
+        #     for frame_pair_idx in range(len(points_assign_mat_list)):
+        #         frame_pair = points_assign_mat_list[frame_pair_idx]
+        #         points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2 = frame_pair
+        #         assign_matrix_bs_1 = F.softmax(assign_matrix_bs_1, dim=2)
+        #         assign_matrix_bs_2 = F.softmax(assign_matrix_bs_2, dim=2)
+        #
+        #         assigned_points_1in2_bs = torch.bmm(assign_matrix_bs_1, points_bs_2)  # pts1在2坐标系下的映射
+        #         # assigned_points_1in2_bs与point_bs_1计算位姿
+        #         for j in range(len(assigned_points_1in2_bs)):
+        #             assigned_points = assigned_points_1in2_bs[j].cpu().detach().numpy()
+        #             points_1 = points_bs_1[j].cpu().detach().numpy()
+        #             points_2 = points_bs_2[j].cpu().detach().numpy()
+        #
+        #             cv2.imshow('frame1 color', data[frame_pair_idx]['meta']['pre_fetched']['color'].numpy().squeeze(0))
+        #             cv2.waitKey(0)
+        #             cv2.imshow('frame2 color', data[frame_pair_idx + 1]['meta']['pre_fetched']['color'].numpy().squeeze(0))
+        #             cv2.waitKey(0)
+        #
+        #             color_red = np.array([255, 0, 0])
+        #             color_green = np.array([0, 255, 0])
+        #             color_blue = np.array([0, 0, 255])
+        #             pts_colors = [color_green, color_red]
+        #             points_1 = points_bs_1[j].cpu().detach().numpy()
+        #             render_points_diff_color('points_1:green points_2:red', [points_1, points_2],
+        #                                      pts_colors, save_img=False,
+        #                                      show_img=True)
+        #             render_points_diff_color('assigned_points:green points_1:red', [assigned_points, points_1],
+        #                                      pts_colors, save_img=False,
+        #                                      show_img=True)
+        #             render_points_diff_color('assigned_points:green points_2:red', [assigned_points, points_2],
+        #                                      pts_colors, save_img=False,
+        #                                      show_img=True)
+        #             # 测试
+        #             # points_1和2拟合位姿，然后变换1
+        #             predicted_pose12 = pose_fit(points_1, assigned_points)  # 总是返回None是为什么？？？
+        #             points_1_RT = np.matmul(predicted_pose12['rotation'], points_1.transpose()).transpose() * predicted_pose12[
+        #                 'scale'] + predicted_pose12['translation'].transpose()
+        #
+        #             render_points_diff_color('pose_fit pts1:green pts2:red', [points_1_RT, points_2],
+        #                                      pts_colors, save_img=False,
+        #                                      show_img=True)
+        #
+        #
+        #             predicted_pose12 = pose_fit(points_2, points_2)  # 模型预测的位姿
+        #             # 获得前后两帧的sRT
+        #             # meta中的位姿nocs2camera是 get_gt_poses.py中的函数
+        #             # get_image_pose(num_instances, mask, coord, depth, intrinsics):
+        #             # 通过函数 pose = pose_fit(coord_pts, pts)获得的
+        #             sRT1 = data[frame_pair_idx]['meta']['nocs2camera'][0]
+        #             sRT2 = data[frame_pair_idx+1]['meta']['nocs2camera'][0]
+        #             R12 = torch.mm(torch.inverse(sRT1['rotation'].squeeze(0)), sRT2['rotation'].squeeze(0))
+        #
+        #             # 按理说 R12 应该与 gt meta中的points pose_fit得到的旋转一样
+        #             gt_points1 = data[frame_pair_idx]['points'].cpu().squeeze(0).transpose(0, 1).numpy()
+        #             gt_points2 = data[frame_pair_idx+1]['points'].cpu().squeeze(0).transpose(0, 1).numpy()
+        #             gt_pose12 = pose_fit(gt_points1, gt_points2)
+        #
+        #
+        #         # 与gt进行比较
+        #
+        #     #return total_loss
 
 
 

@@ -446,6 +446,11 @@ SAR-Net²¹³ä²ÄÁÏÖÐ¹ØÓÚ3D-GCNµÄÉèÖÃ£º
 
 ÈçºÎÈÃÄ£ÐÍÄÜ¹»ÓÐÒ»¸öÊä³öµÄ³õÖµ£¿ÀýÈç¶ÔÓ¦µãÏÈÕÒ×î½üµÄµã¡£
 
+ÕâÊÇ½«CNNµÄÊäÈë´ÓpaddingÌæ»»Îªbbox²Ã¼ôÖ®ºóµÄ½á¹û£¬±ÈÖ®Ç°µÄÁ÷³©Ò»Ð©¡£µ«ÊÇÒÀÈ»Ã»ÄÜ½â¾öÎÊÌâ
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-20-aWyo3y.png' width="100%" >
+
+
 ### ²âÊÔËðÊ§º¯Êýcorr_loss
 sRt12_gtÊÇgtÎ»×Ë±ä»»£¬ÄÜ¹»½«points_1µÄµãÍ¨¹ý¸ÕÌå±ä»»±äµ½points2µÄÎ»ÖÃ¡£Òò´Ë±ä»»ºóµÄµãÓëpoints_1µÄµã»¹ÊÇÓÐ¶ÔÓ¦¹ØÏµµÄ¡£
 Òò´Ë¿ÉÒÔÓë¶ÔÓ¦¾ØÕósoft_assign_1Ó³ÉäºóµÄµã×ö²îÀ´¼ÆËãÎó²î¡£
@@ -489,3 +494,22 @@ sRt12_gtÊÇgtÎ»×Ë±ä»»£¬ÄÜ¹»½«points_1µÄµãÍ¨¹ý¸ÕÌå±ä»»±äµ½points2µÄÎ»ÖÃ¡£Òò´Ë±ä»»º
 </div>
 
 ÉÏÍ¼ÖÐ£¬¶ÔÓ¦¾ØÕóÆð×÷ÓÃµÄ²¿·ÖÊÇµÚ1,2Í¼£¬ÒòÎªÒªÊÇµÄÊµÀýµãÔÆ£¨ÓÉprior+D±äÐÎµÃµ½µÄ£©±äÐÎ³É½Ó½ügtÄ£ÐÍ£¨²ÐÈ±£©µÄÑù×Ó
+
+## SAR-NetÖÐÑµÁ·3D-GCN
+
+### Êý¾Ý
+
+Ê¹ÓÃºÏ³ÉÊý¾Ý¼¯CAMERAÀ´Éú³ÉÑµÁ·Êý¾Ý£¬ÒòÎªÊÇCAMERAÖ±½Ó½«ÐéÄâÎïÌåäÖÈ¾µ½ÕæÊµ³¡¾°ÉÏ£¬
+ËùÒÔ²»»áÓÐÕæÊµÊý¾Ý¼¯ÖÐmask_depth·´Í¶Ó°ºóÍÏÎ²µÄÎÊÌâ
+
+SAR-Net»¹¿¼ÂÇÁËÕë¶ÔbboxºÍmaskÁ½ÖÖ²»Í¬µÄ·Ö¸î½á¹û½øÐÐÑµÁ·¡£
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-20-tkp8nv.png' width="100%" >
+
+¶Ôgt½øÐÐ´¦Àí£¬Ê¹Æä°üº¬±³¾°ÏñËØ£º
+
+(1)bbox·Ö¸î½á¹û£¬·Ö±ðÒÆ¶¯×óÉÏ½ÇºÍÓÒÉÏ½ÇÀ´¶Ôbbox½øÐÐ±ä»»¡£ÒÆ¶¯·¶Î§ÊÇ-5~15ÏñËØ
+
+(2)mask·Ö¸î½á¹û£¬½«maskÔö´ó0~5¸öÏñËØ£¬²¢¶Ô¿×¶´(ÀýÈçÂí¿Ë±­µÄ°ÑÊÖ½øÐÐÌî³ä)
+
+### Ïë·¨£ºÅÜÒ»ÕÅºÏ³ÉÊý¾Ý¼¯µÄnormal map¿´¿´ÊÇ·ñ¶ÔÇ°±³¾°·Ö¸îÄÜ¹»ÓÐËù¹±Ï×

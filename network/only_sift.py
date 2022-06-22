@@ -371,6 +371,8 @@ class SIFT_Track(nn.Module):
 
             # 从mask获得choose
             mask = np.logical_and(mask, depth > 0)
+            # choose是bbox裁剪后的mask生成的，但是可以直接用来读取裁剪后图像上的坐标
+            # 如果想要读取原大小图像上的像素点， 会有问题
             choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()
             if len(choose) < 32:
                 print('available pixel less than 32, cant use this')
@@ -397,15 +399,19 @@ class SIFT_Track(nn.Module):
             distance_threshold = 2000
             difference_threshold = 20  # 周围的点深度距离超过10mm则不考虑
             point_into_surface = False
-
-            depth_nor = depth.astype(np.uint16)
+            # 使用裁剪后的深度图计算normal map
+            depth_nor = depth[rmin:rmax, cmin:cmax].numpy().astype(np.uint16)
             normals_map_out = normalSpeed.depth_normal(depth_nor, fx, fy, k_size, distance_threshold, difference_threshold,
                                                        point_into_surface)
             timer.tick('depth 2 normal_end')
             nrm = normals_map_out
 
+            # width_crop = depth[rmin:rmax, cmin:cmax].shape[1]
+            # height_crop = depth[rmin:rmax, cmin:cmax].shape[0]
+
 
             depth_masked = depth[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]       # 对点云进行一个采样,采样n_pts个点
+            # 用来提取裁剪前图像上的点，主要用于反投影
             xmap_masked = self.xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]     # 像素坐标u
             ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]     # 像素坐标v
             pt2 = depth_masked / self.norm_scale
@@ -414,14 +420,19 @@ class SIFT_Track(nn.Module):
             pt1 = (ymap_masked - self.cam_cy) * pt2 / self.cam_fy     # y
             points = np.concatenate((pt0, pt1, pt2), axis=1)  # xyz
 
+            # 用来提取裁剪后图像上的点，用于从rgb和nrm上提取点云对应的特征
+            xmap_crop_masked = xmap_masked - cmin - 1
+            ymap_crop_masked = ymap_masked - rmin - 1
+
             crop_w = rmax - rmin
             ratio = self.img_size / crop_w
-            col_idx = choose % crop_w
+            col_idx = choose % crop_w  # 一维坐标转裁剪后的二维坐标
             row_idx = choose // crop_w
-            choose = (torch.floor(row_idx * ratio) * self.img_size + torch.floor(col_idx * ratio)).type(torch.int64)
+            # 计算裁剪后的二维坐标到resize后的二维坐标，然后转一维坐标
+            choose_resize = (torch.floor(row_idx * ratio) * self.img_size + torch.floor(col_idx * ratio)).type(torch.int64)
             # choose (1024, 1)
 
-            choose_bs.append(choose)
+            choose_bs.append(choose_resize)  # 存放resize图像对应的choose
 
             # points_viz = points.copy()  # 测试反投影|(1)
             points = torch.from_numpy(np.transpose(points, (2, 0, 1))).cuda()  # points (1024, 3, 1) -> (1, 1024, 3)
@@ -452,10 +463,15 @@ class SIFT_Track(nn.Module):
             #                              pts_colors, save_img=False,
             #                              show_img=True)
 
-            points_rgb = color[rmin:rmax, cmin:cmax][ymap_masked, xmap_masked]
-            points_rgb = points_rgb.squeeze(1).transpose(1, 0).cuda()  # points_rgb (1024, 1, 3) -> (1, 1024, 3)
-            points_nrm = nrm[ymap_masked, xmap_masked]
-            points_nrm = points_nrm.squeeze(1).transpose(1, 0).cuda()  # points_nrm (1024, 1, 3) -> (1, 1024, 3)
+            # img_cropped (3, 192, 192)
+            # 有一个问题，img_cropped是通过resize才变成192x192的，xmap_masked和ymap_masked应该如何变换？
+            # 可以用未裁剪的图像+bbox+xmap来获得
+            # 真正的问题在于emb，但是有一个ratio能否解决这个问题？
+
+            points_rgb = color[ymap_masked, xmap_masked, :]
+            points_rgb = points_rgb.squeeze(2).transpose(0, 1).cuda()  # points_rgb -> (1, 1024, 3)
+            points_nrm = nrm[ymap_crop_masked, xmap_crop_masked]
+            points_nrm = torch.from_numpy(points_nrm).squeeze(1).transpose(1, 0).cuda()  # points_nrm (1024, 1, 1, 3) -> (1, 1024, 3)
             timer_1.tick('single batch | extract color and nrm feature')
             # 如果要增加对噪声点的过滤，需要重新采样(重新计算choose)，或者在计算choose之前就进行过滤
             # viz_multi_points_diff_color(f'pts:{batch_idx}', [points], [np.array([[1, 0, 0]])])
@@ -484,7 +500,7 @@ class SIFT_Track(nn.Module):
         # SGPA中,这里的图像已经被裁剪为192x192了
         # 之后可以测试一下
         # problem: 这里绝对是可以继续优化的，因为后面choose会将没用的筛选掉，所以这里会计算很多没用CNN
-        # (bs, 3, 640, 480) -> (bs, 32, 640, 480)
+
         # (bs, 3, 192, 192) -> (bs, 32, 192, 192)
         out_img = self.psp(img_bs)
         di = out_img.size()[1]  # 特征维度 32
@@ -602,7 +618,6 @@ class SIFT_Track(nn.Module):
 
 
         return points_assign_mat, pose_12_bs
-
 
     def set_data(self, data):
         print('set_data ...')
