@@ -513,3 +513,31 @@ SAR-Net还考虑了针对bbox和mask两种不同的分割结果进行训练。
 (2)mask分割结果，将mask增大0~5个像素，并对孔洞(例如马克杯的把手进行填充)
 
 ### 想法：跑一张合成数据集的normal map看看是否对前背景分割能够有所贡献
+
+
+### 计算loss时似乎有问题
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-06-23-LSxZ3a.png' width="50%" >
+
+上图有4组点云,
+
+绿色:     pts2to1   # pts2通过gt位姿变换到1
+红色:     pts1to2   # pts1通过gt位姿变换到2
+蓝色与深蓝色:   pts1与pts2
+
+gt位移
+(-0.0004, -0.0023, -0.0004)
+计算
+(-0.0528,  0.0318,  0.0375)
+
+应该是 multi_pose_with_pts 出了问题？计算pts1与pts2的平均点做差，差的也特别大。可视化一下平均点
+
+似乎找到原因了
+位移t没有问题，反而是只要乘以旋转矩阵R，就会发生一个大位移。
+
+是否是精度导致的问题？get_total_loss_2_frame的参数pose12_gt是float32的
+
+t和R的公式推错了，看打草纸
+
+改正后依然不行，将两帧投影到图像上。验证了，从nocs到camera的变换是没有问题的，经过sRt1和sRt2变换的点云是重合的。
+绝对不可能像上图那样距离很远

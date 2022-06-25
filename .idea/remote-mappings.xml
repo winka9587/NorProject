@@ -3,13 +3,7 @@
   <component name="RemoteMappingsManager">
     <list>
       <list>
-        <remote-mappings server-id="python@sftp://cxx@211.87.232.110:22/home/cxx/anaconda3/envs/pointnet/bin/python">
-          <settings>
-            <list>
-              <mapping local-root="$PROJECT_DIR$" remote-root="/data1/cxx/Lab_work/NorProject" />
-            </list>
-          </settings>
-        </remote-mappings>
+        <remote-mappings server-id="python@sftp://cxx@211.87.232.110:22/home/cxx/anaconda3/envs/pointnet/bin/python" />
       </list>
     </list>
   </component>

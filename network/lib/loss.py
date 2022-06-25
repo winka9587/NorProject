@@ -113,12 +113,16 @@ class Loss(nn.Module):
 
     def pose_dict_RT(self, pose_dict):
         scale = pose_dict['scale']    # (bs, 1)
-        RMat = pose_dict['rotation']  # (bs, 3, 3)
+        RMatrix = pose_dict['rotation']  # (bs, 3, 3)
         tVec = pose_dict['translation']  # (bs, 1, 3, 1)
 
-        sR = RMat * scale.view((-1, 1, 1))  # (bs, 3, 3)
+        # sRt_ = torch.ones((scale.shape[0], 4, 4))
+        # sRt_[:, :3, :3] = RMatrix
+        # sRt_[:, :3, 3] = tVec.squeeze(1).squeeze(-1)
+
+        sR = RMatrix * scale.view((-1, 1, 1))  # (bs, 3, 3)
         sRt = torch.cat((sR, tVec.transpose(1, 2).squeeze(-1)), 2)  # (bs, 3, 4)
-        bottom = torch.zeros(RMat.shape[0], 1, 4).cuda()  # (bs, 1, 4)
+        bottom = torch.zeros(RMatrix.shape[0], 1, 4).cuda()  # (bs, 1, 4)
         bottom[:, :, 3] = 1
         sRt01 = torch.cat((sRt, bottom), 1)  # (bs, 4, 4)
         return sRt01
@@ -128,9 +132,36 @@ class Loss(nn.Module):
         # pose_sRT  (bs, 4, 4)
         pts = points.clone()
         pts = pts.transpose(1, 2)  # (bs, 3, 1024)
-        one_ = torch.ones(pts.shape[0], 1, 1024).cuda()
+        one_ = torch.ones(pts.shape[0], 1, 1024).cuda()  # (bs, 1, 1024) fill 1
         pts = torch.cat((pts, one_), 1)  # (bs, 4, 1024)
         res_pts_4 = torch.bmm(pose_sRT, pts)  # (bs, 4, 4)*(bs, 4, 1024)
+        # (bs, 4, 1024)
+        res_pts_4 = res_pts_4[:, 0:3, :].transpose(-1, -2)
+        return res_pts_4
+
+    def multi_pose_with_pts_debug(self, pose_sRT, points, debug):
+        # points    (bs, 1024, 3)
+        # pose_sRT  (bs, 4, 4)
+        pts = points.clone()
+        pts = pts.transpose(1, 2)  # (bs, 3, 1024)
+        one_ = torch.ones(pts.shape[0], 1, 1024).cuda()  # (bs, 1, 1024) fill 1
+        pts = torch.cat((pts, one_), 1)  # (bs, 4, 1024)
+        pose_sRT_ = pose_sRT.clone()
+        if debug == 1:
+            pose_sRT_[:, :3, :3] = 0
+            pose_sRT_[:, 0, 0] = 1
+            pose_sRT_[:, 1, 1] = 1
+            pose_sRT_[:, 2, 2] = 1
+        elif debug == 2:
+            pose_sRT_[:, :3, 3] = 0
+        elif debug == 3:
+            pose_sRT_[:, :3, :3] = 0
+            pose_sRT_[:, 0, 0] = 1
+            pose_sRT_[:, 1, 1] = 1
+            pose_sRT_[:, 2, 2] = 1
+            pose_sRT_[:, :3, 3] = 0
+        print(f'pose_Rt_{debug}: \n{pose_sRT_}')
+        res_pts_4 = torch.bmm(pose_sRT_, pts)  # (bs, 4, 4)*(bs, 4, 1024)
         # (bs, 4, 1024)
         res_pts_4 = res_pts_4[:, 0:3, :].transpose(-1, -2)
         return res_pts_4
@@ -168,6 +199,11 @@ class Loss(nn.Module):
         # gt
         points_1to2_gt = self.multi_pose_with_pts(sRt12_gt, points_1)
         points_2to1_gt = self.multi_pose_with_pts(sRt21_gt, points_2)
+        # debug
+        points_1to2_RI = self.multi_pose_with_pts_debug(sRt12_gt, points_1, 1)
+        points_1to2_tI = self.multi_pose_with_pts_debug(sRt12_gt, points_1, 2)
+        points_1to2_RtI = self.multi_pose_with_pts_debug(sRt12_gt, points_1, 3)
+
 
         # 0. CD loss 能否约束形状？
         cd_loss1, _, _ = self.chamferloss(points_1to2_gt.type(torch.float32).contiguous(), points_1_in_2.type(torch.float32))
@@ -200,20 +236,23 @@ class Loss(nn.Module):
         total_loss = cd_loss1 + cd_loss2 + corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss + entropy_loss_1v + entropy_loss_2v
 
         # if corr_loss_1 < 0.10:
+        batch_idx = 5
         I_matrix = torch.eye(1024).unsqueeze(0).repeat(10, 1, 1)
         I_gt = torch.eye(4).unsqueeze(0).repeat(10, 1, 1)
         soft_assign_1 = soft_assign_1.type(torch.float64)
         points_1 = points_1.type(torch.float64)
         points_2 = points_2.type(torch.float64)
         points_1_in_2 = torch.bmm(soft_assign_1, points_2)
-        assigned_points = points_1_in_2[0].cpu().detach().numpy()
-        points_1 = points_1[0].cpu().detach().numpy()
-        points_2 = points_2[0].cpu().detach().numpy()
+        assigned_points = points_1_in_2[batch_idx].cpu().detach().numpy()
+        points_1 = points_1[batch_idx].cpu().detach().numpy()
+        points_2 = points_2[batch_idx].cpu().detach().numpy()
         # RGB 颜色已验证没问题
         color_red = np.array([255, 0, 0])
         color_green = np.array([0, 255, 0])
         color_blue = np.array([0, 0, 255])
         color_blue2 = np.array([0, 0, 100])
+        color_gray = np.array([93, 93, 93])
+        color_black = np.array([255, 255, 255])
         pts_colors = [color_green, color_red]
 
         # 输入点云1,2，输出重新排序后的2使其与1点对应
@@ -232,8 +271,27 @@ class Loss(nn.Module):
             p2_resorted = torch.stack(p_sort, dim=0)
             return ref, p2_resorted
 
-        render_points_diff_color('2', [points_2to1_gt[0].cpu().numpy(), points_1to2_gt[0].cpu().numpy(), points_1, points_2],
-                                 [color_green, color_red, color_blue, color_blue2], save_img=False,
+        mean1 = np.mean(points_1, 0).reshape(1, 3)
+        mean2 = np.mean(points_2, 0).reshape(1, 3)
+
+        render_points_diff_color('2',
+                                 [points_2to1_gt[batch_idx].cpu().numpy(),
+                                  points_1to2_gt[batch_idx].cpu().numpy(),
+                                  points_1,
+                                  points_2,
+                                  points_1to2_RI[batch_idx].cpu().numpy(),
+                                  points_1to2_tI[batch_idx].cpu().numpy()],
+                                 [color_green, color_red, color_blue, color_blue2, color_black, color_gray], save_img=False,
+                                 show_img=True)
+
+
+        render_points_diff_color('3',
+                                  [points_1,
+                                  points_1to2_RtI[batch_idx].cpu().numpy(),
+                                  points_1to2_RI[batch_idx].cpu().numpy(),
+                                  points_1to2_tI[batch_idx].cpu().numpy()],
+                                 [color_green, color_red, color_blue, color_gray],
+                                 save_img=False,
                                  show_img=True)
 
         ref, p2_rs = sort_corr_points(points_1to2_gt[0], torch.from_numpy(points_2).cuda())  # 返回的是两个tensor

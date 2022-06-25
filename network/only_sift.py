@@ -14,6 +14,7 @@ from normalspeedTest import norm2bgr
 import network.FFB6D_models.pytorch_utils as pt_utils
 # from network.FFB6D_models.RandLA.RandLANet import Network as RandLANet
 from captra_utils.utils_from_captra import backproject
+from network.lib.utils import sample_points_from_mesh, render_points_diff_color
 
 from lib.pspnet import PSPNet
 from lib.pointnet import Pointnet2MSG
@@ -593,9 +594,40 @@ class SIFT_Track(nn.Module):
 
 
             pose_12_bs = {}
+            # s12 = s2/s1
             pose_12_bs['scale'] = pose_2_bs['scale']/pose_1_bs['scale']
-            pose_12_bs['translation'] = pose_2_bs['translation'] - pose_1_bs['translation']
-            pose_12_bs['rotation'] = torch.bmm(pose_2_bs['rotation'].squeeze(1), pose_1_bs['rotation'].squeeze(1).transpose(-2, -1))
+            # R12 = R2*R1.T
+            pose_12_bs['rotation'] = torch.bmm(pose_2_bs['rotation'].squeeze(1),
+                                               pose_1_bs['rotation'].squeeze(1).transpose(-2, -1))
+            # t12 = t2 - s12*R12*t1
+            pose_12_bs['translation'] = pose_2_bs['translation'] - \
+                                        (pose_12_bs['scale'].reshape(-1, 1, 1) * \
+                                        torch.bmm(pose_12_bs['rotation'], pose_1_bs['translation'].squeeze(1))).unsqueeze(1)
+
+            t = pose_2_bs['translation'] - pose_1_bs['translation']
+
+            sRt_2 = torch.ones((4, 4))
+            sRt_2[:3, :3] = pose_2_bs['scale'][0] * pose_2_bs['rotation'].squeeze(1)[0]
+            sRt_2[:3, 3] = pose_2_bs['translation'].squeeze(1).squeeze(-1)[0]
+
+            sRt_1 = torch.ones((4, 4))
+            sRt_1[:3, :3] = pose_1_bs['scale'][0] * pose_1_bs['rotation'].squeeze(1)[0]
+            sRt_1[:3, 3] = pose_1_bs['translation'].squeeze(1).squeeze(-1)[0]
+
+            p = torch.ones((4, 1))
+
+            # gt_model_numpy (2048, 3)
+            gt_model_numpy = sample_points_from_mesh('/data1/cxx/Lab_work/dataset/obj_models/real_train/bottle_blue_google_norm.obj', 2048, fps=True, ratio=3)
+
+            model = np.ones((2048, 4))
+            model[:, :3] = gt_model_numpy
+
+            m1 = (sRt_1.numpy() @ model.transpose()).transpose()[:, :3]
+            m2 = (sRt_2.numpy() @ model.transpose()).transpose()[:, :3]
+
+            render_points_diff_color("model", [gt_model_numpy], [np.array([255, 0, 0])])
+            render_points_diff_color("p1 and p2", [m1, m2], [np.array([255, 0, 0]), np.array([0, 255, 0])])
+
             # R1 = pose_1_bs['rotation'][0].squeeze(0)
             # R2 = pose_2_bs['rotation'][0].squeeze(0)
             # R12 = pose_12_bs['rotation'][0]
@@ -615,6 +647,8 @@ class SIFT_Track(nn.Module):
             #     pose_12['rotation'] = R12
             #     pose_12['scale'] = s12
             #     pose_12['translation'] = t12
+
+        # 检查模型投影到图像上
 
 
         return points_assign_mat, pose_12_bs
