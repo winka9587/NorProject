@@ -4,6 +4,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from .nn_distance.chamfer_loss import ChamferLoss
 from network.lib.utils import render_points_diff_color, render_lines
+from captra_utils.utils_from_captra import project
 
 # SPD 的 loss
 class Loss(nn.Module):
@@ -116,9 +117,10 @@ class Loss(nn.Module):
         RMatrix = pose_dict['rotation']  # (bs, 3, 3)
         tVec = pose_dict['translation']  # (bs, 1, 3, 1)
 
-        # sRt_ = torch.ones((scale.shape[0], 4, 4))
+        # sRt_ = torch.zeros((scale.shape[0], 4, 4))
         # sRt_[:, :3, :3] = RMatrix
         # sRt_[:, :3, 3] = tVec.squeeze(1).squeeze(-1)
+        # sRt_[:, 3, 3] = 1
 
         sR = RMatrix * scale.view((-1, 1, 1))  # (bs, 3, 3)
         sRt = torch.cat((sR, tVec.transpose(1, 2).squeeze(-1)), 2)  # (bs, 3, 4)
@@ -172,7 +174,7 @@ class Loss(nn.Module):
         return sRt_bs_inv
 
 
-    def get_total_loss_2_frame(self, points_1,  points_2, assign_mat_1, assign_mat_2, pose12_gt):
+    def get_total_loss_2_frame(self, points_1,  points_2, assign_mat_1, assign_mat_2, pose12_gt, m1m2):
         # def forward(self, assign_mat, deltas, prior, nocs, model):
         """
         Args:
@@ -180,6 +182,7 @@ class Loss(nn.Module):
             deltas: bs x nv x 3
             prior: bs x nv x 3
         """
+        model_1, model_2, gt_model_numpy, model_1_12 = m1m2
 
         soft_assign_1 = F.softmax(assign_mat_1, dim=2)
         soft_assign_2 = F.softmax(assign_mat_2, dim=2)
@@ -274,6 +277,27 @@ class Loss(nn.Module):
         mean1 = np.mean(points_1, 0).reshape(1, 3)
         mean2 = np.mean(points_2, 0).reshape(1, 3)
 
+        render_points_diff_color('model 1, 2, 1_12',
+                                 [model_1, model_2, model_1_12],
+                                 [color_red, color_green, color_blue],
+                                 save_img=False,
+                                 show_img=True)
+
+        render_points_diff_color('model and pts 1',
+                                 [points_1, model_1, gt_model_numpy],
+                                 [color_red, color_green, color_blue],
+                                 save_img=False,
+                                 show_img=True)
+
+        render_points_diff_color('model and pts 2',
+                                 [points_2, model_2, gt_model_numpy],
+                                 [color_red, color_green, color_blue],
+                                 save_img=False,
+                                 show_img=True)
+
+        # 投影到图像上
+
+
         render_points_diff_color('2',
                                  [points_2to1_gt[batch_idx].cpu().numpy(),
                                   points_1to2_gt[batch_idx].cpu().numpy(),
@@ -315,12 +339,12 @@ class Loss(nn.Module):
 
         return total_loss, cd_loss1, cd_loss2, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v
 
-    def forward(self, points_assign_mat_list, pose12_gt):
+    def forward(self, points_assign_mat_list, pose12_gt, m1m2):
         total_loss = 0.0
         for frame_pair in points_assign_mat_list:
             points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2 = frame_pair
             frame_total_loss, cd_loss1, cd_loss2, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v = \
-                self.get_total_loss_2_frame(points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, pose12_gt)
+                self.get_total_loss_2_frame(points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, pose12_gt, m1m2)
             print("cd_loss_1:      {7},\n"
                   "        2       {8}\n"
                   "corr_loss_1:    {0},\n"

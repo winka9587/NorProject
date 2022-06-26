@@ -541,3 +541,11 @@ t和R的公式推错了，看打草纸
 
 改正后依然不行，将两帧投影到图像上。验证了，从nocs到camera的变换是没有问题的，经过sRt1和sRt2变换的点云是重合的。
 绝对不可能像上图那样距离很远
+
+将model,sRT*model与观测点云pts三个点云同时绘制出来，似乎是有个轴错了
+
+<a style="color:blue">
+[确认了一件事，gt_part的计算是不必要的，只用nocs2camera就行了 ，两个的值完全是一样的]
+</a>
+
+在CAPTRA的测试代码中，obj模型通过sRT可以与pts重合，只是差个scale

@@ -606,24 +606,35 @@ class SIFT_Track(nn.Module):
 
             t = pose_2_bs['translation'] - pose_1_bs['translation']
 
-            sRt_2 = torch.ones((4, 4))
+            sRt_2 = torch.eye(4)
             sRt_2[:3, :3] = pose_2_bs['scale'][0] * pose_2_bs['rotation'].squeeze(1)[0]
             sRt_2[:3, 3] = pose_2_bs['translation'].squeeze(1).squeeze(-1)[0]
 
-            sRt_1 = torch.ones((4, 4))
+            sRt_1 = torch.eye(4)
             sRt_1[:3, :3] = pose_1_bs['scale'][0] * pose_1_bs['rotation'].squeeze(1)[0]
             sRt_1[:3, 3] = pose_1_bs['translation'].squeeze(1).squeeze(-1)[0]
+
+            sRt_12 = torch.eye(4)
+            sRt_12[:3, :3] = pose_12_bs['scale'][0] * pose_12_bs['rotation'][0]
+            sRt_12[:3, 3] = pose_12_bs['translation'].squeeze(1).squeeze(-1)[0]
 
             p = torch.ones((4, 1))
 
             # gt_model_numpy (2048, 3)
             gt_model_numpy = sample_points_from_mesh('/data1/cxx/Lab_work/dataset/obj_models/real_train/bottle_blue_google_norm.obj', 2048, fps=True, ratio=3)
+            # 好像并不是从模型坐标系到观测点云的
+            # 而是从nocs到观测点云的
+            # 因此应该得到nocs才行
 
             model = np.ones((2048, 4))
             model[:, :3] = gt_model_numpy
 
             m1 = (sRt_1.numpy() @ model.transpose()).transpose()[:, :3]
             m2 = (sRt_2.numpy() @ model.transpose()).transpose()[:, :3]
+
+            model_1 = np.ones((2048, 4))
+            model_1[:, :3] = m1
+            m1_12 = (sRt_12.numpy() @ model_1.transpose()).transpose()[:, :3]
 
             render_points_diff_color("model", [gt_model_numpy], [np.array([255, 0, 0])])
             render_points_diff_color("p1 and p2", [m1, m2], [np.array([255, 0, 0]), np.array([0, 255, 0])])
@@ -651,7 +662,7 @@ class SIFT_Track(nn.Module):
         # 检查模型投影到图像上
 
 
-        return points_assign_mat, pose_12_bs
+        return points_assign_mat, pose_12_bs, (m1, m2, gt_model_numpy, m1_12)
 
     def set_data(self, data):
         print('set_data ...')
@@ -668,14 +679,14 @@ class SIFT_Track(nn.Module):
 
     def update(self):
         print('forwarding ...')
-        points_assign_mat, pose12 = self.forward()
+        points_assign_mat, pose12, m1m2 = self.forward()
         print('forward end')
         # 计算loss
         if self.mode == 'train':
             # 寻找coord的对应关系
 
             print('computing loss')
-            loss = self.criterion(points_assign_mat, pose12)
+            loss = self.criterion(points_assign_mat, pose12, m1m2)
             print('compute loss end')
             print(f'loss: {loss}')
             self.optimizer.zero_grad()
