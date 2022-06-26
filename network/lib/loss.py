@@ -239,7 +239,7 @@ class Loss(nn.Module):
         total_loss = cd_loss1 + cd_loss2 + corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss + entropy_loss_1v + entropy_loss_2v
 
         # if corr_loss_1 < 0.10:
-        batch_idx = 5
+        batch_idx = 0
         I_matrix = torch.eye(1024).unsqueeze(0).repeat(10, 1, 1)
         I_gt = torch.eye(4).unsqueeze(0).repeat(10, 1, 1)
         soft_assign_1 = soft_assign_1.type(torch.float64)

@@ -549,3 +549,11 @@ t和R的公式推错了，看打草纸
 </a>
 
 在CAPTRA的测试代码中，obj模型通过sRT可以与pts重合，只是差个scale
+
+而在NorPorjec中，obj模型通过sRT之后与pts差的特别远。为什么会这样？直接让两个代码读同一张图片。下面是得到的结论：
+  1.位姿sRt是一样的，至少大致是一样的，可能有一些误差，但不至于大方向都不对了
+  2.目前想到的可能的原因是观测点云pts的问题。看一下CAPTRA代码中pts是如何得到的。
+
+>  pts, idxs = backproject(depth, intrinsics, mask == inst_i)
+
+在backproject中对得到点云的z周进行了取反操作。可是取反之后也不行。
