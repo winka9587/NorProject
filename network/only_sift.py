@@ -412,14 +412,28 @@ class SIFT_Track(nn.Module):
 
 
             depth_masked = depth[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]       # 对点云进行一个采样,采样n_pts个点
-            # 用来提取裁剪前图像上的点，主要用于反投影
+            # 用来提取裁剪前图像上的点，主要用于反投影(因为choose是在裁剪前的mask的2D bbox上得到的)
             xmap_masked = self.xmap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]     # 像素坐标u
             ymap_masked = self.ymap[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]     # 像素坐标v
-            pt2 = depth_masked / self.norm_scale
-            pt2 = pt2.numpy()                               # z
-            pt0 = (xmap_masked - self.cam_cx) * pt2 / self.cam_fx     # x
-            pt1 = (ymap_masked - self.cam_cy) * pt2 / self.cam_fy     # y
-            points = np.concatenate((pt0, pt1, pt2), axis=1)  # xyz
+
+            # origin backproject code of NorProject, may from SGPA.
+            # pt2 = depth_masked / self.norm_scale
+            # pt2 = pt2.numpy()
+            # pt0 = (xmap_masked - self.cam_cx) * pt2 / self.cam_fx     # x
+            # pt1 = (ymap_masked - self.cam_cy) * pt2 / self.cam_fy     # y
+            # points = np.concatenate((pt0, pt1, pt2), axis=1)  # xyz
+
+            # new backproject code
+            # like code of CAPTRA, use -z
+            pt2 = depth_masked
+            pt2 = pt2.numpy()
+            pt0 = (xmap_masked - self.cam_cx) * pt2 / self.cam_fx  # x
+            # uv: v = height-v
+            ymap_masked2 = self.ymap.shape[0] - ymap_masked
+            pt1 = (ymap_masked2 - self.cam_cy) * pt2 / self.cam_fy  # y
+            pt2 = -pt2
+            points = np.concatenate((pt0, pt1, pt2), axis=1)
+            points = points / self.norm_scale
 
             # 用来提取裁剪后图像上的点，用于从rgb和nrm上提取点云对应的特征
             xmap_crop_masked = xmap_masked - cmin - 1
@@ -604,8 +618,6 @@ class SIFT_Track(nn.Module):
                                         (pose_12_bs['scale'].reshape(-1, 1, 1) * \
                                         torch.bmm(pose_12_bs['rotation'], pose_1_bs['translation'].squeeze(1))).unsqueeze(1)
 
-            t = pose_2_bs['translation'] - pose_1_bs['translation']
-
             sRt_2 = torch.eye(4)
             sRt_2[:3, :3] = pose_2_bs['scale'][0] * pose_2_bs['rotation'].squeeze(1)[0]
             sRt_2[:3, 3] = pose_2_bs['translation'].squeeze(1).squeeze(-1)[0]
@@ -617,8 +629,6 @@ class SIFT_Track(nn.Module):
             sRt_12 = torch.eye(4)
             sRt_12[:3, :3] = pose_12_bs['scale'][0] * pose_12_bs['rotation'][0]
             sRt_12[:3, 3] = pose_12_bs['translation'].squeeze(1).squeeze(-1)[0]
-
-            p = torch.ones((4, 1))
 
             # gt_model_numpy (2048, 3)
             gt_model_numpy = sample_points_from_mesh('/data1/cxx/Lab_work/dataset/obj_models/real_train/bottle_blue_google_norm.obj', 2048, fps=True, ratio=3)
@@ -660,6 +670,7 @@ class SIFT_Track(nn.Module):
             #     pose_12['translation'] = t12
 
         # 检查模型投影到图像上
+        print(last_frame['meta']['path'])
 
 
         return points_assign_mat, pose_12_bs, (m1, m2, gt_model_numpy, m1_12)

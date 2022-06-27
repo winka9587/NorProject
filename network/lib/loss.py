@@ -296,26 +296,12 @@ class Loss(nn.Module):
                                  show_img=True)
 
         # 投影到图像上
-
-
-        render_points_diff_color('2',
+        render_points_diff_color('pts12 and pts12_gt_RtTransform',
                                  [points_2to1_gt[batch_idx].cpu().numpy(),
                                   points_1to2_gt[batch_idx].cpu().numpy(),
                                   points_1,
-                                  points_2,
-                                  points_1to2_RI[batch_idx].cpu().numpy(),
-                                  points_1to2_tI[batch_idx].cpu().numpy()],
-                                 [color_green, color_red, color_blue, color_blue2, color_black, color_gray], save_img=False,
-                                 show_img=True)
-
-
-        render_points_diff_color('3',
-                                  [points_1,
-                                  points_1to2_RtI[batch_idx].cpu().numpy(),
-                                  points_1to2_RI[batch_idx].cpu().numpy(),
-                                  points_1to2_tI[batch_idx].cpu().numpy()],
-                                 [color_green, color_red, color_blue, color_gray],
-                                 save_img=False,
+                                  points_2],
+                                 [color_green, color_red, color_blue, color_blue2], save_img=False,
                                  show_img=True)
 
         ref, p2_rs = sort_corr_points(points_1to2_gt[0], torch.from_numpy(points_2).cuda())  # 返回的是两个tensor

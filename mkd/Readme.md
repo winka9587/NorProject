@@ -557,3 +557,9 @@ t和R的公式推错了，看打草纸
 >  pts, idxs = backproject(depth, intrinsics, mask == inst_i)
 
 在backproject中对得到点云的z周进行了取反操作。可是取反之后也不行。
+
+
+最终方法，将两个观测点云存到npy，然后读取显示
+
+结论: 反投影时候SGPA和CAPTRA的像素坐标系uv的原点位置不同，SGPA在左上角，CAPTRA在左下角，
+而nocs2camera位姿针对的是CAPTRA的uv坐标                      
