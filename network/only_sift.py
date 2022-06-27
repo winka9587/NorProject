@@ -157,11 +157,12 @@ def choose_from_mask_bs(mask_bs, n_pts):
 
 
 class SIFT_Track(nn.Module):
-    def __init__(self, device, real, subseq_len=2, mode='train', opt=None, img_size=192):
+    def __init__(self, device, real, subseq_len=2, mode='train', opt=None, img_size=192, remove_border_w=5):
         super(SIFT_Track, self).__init__()
         # self.fc1 = nn.Linear(emb_dim, 512)
         # self.fc2 = nn.Linear(512, 1024)
         # self.fc3 = nn.Linear(1024, 3*n_pts)
+        self.remove_border_w = remove_border_w
         self.mode = mode
         self.subseq_len = subseq_len
         self.device = device
@@ -323,6 +324,21 @@ class SIFT_Track(nn.Module):
         assign_mat_bs = assign_mat_bs.permute(0, 2, 1).contiguous()  # bs x n_pts x nv
         return assign_mat_bs
 
+    def remove_border_bool(self, mask, kernel_size=5):  # enlarge the region w/ 255
+        # print((255 - mask).sum())
+        if isinstance(mask, torch.Tensor):
+            output = mask.clone()
+        else:
+            output = mask.copy()
+        h, w = mask.shape
+        for i in range(h):
+            for j in range(w):
+                if mask[i][j] == False:
+                    output[max(0, i - kernel_size): min(h, i + kernel_size),
+                    max(0, j - kernel_size): min(w, j + kernel_size)] = False
+        # print((255 - output).sum())
+        return output
+
     # 有mask_add_from_last_frame说明是第二帧，需要使用前一帧提供的mask
     def extract_3D_kp(self, frame, mask_bs):
         timer = Timer(True)
@@ -348,6 +364,10 @@ class SIFT_Track(nn.Module):
             color = color_bs[batch_idx]
             depth = depth_bs[batch_idx]
             mask = mask_bs[batch_idx]
+
+            if self.remove_border_w > 0:
+                mask = self.remove_border_bool(mask, kernel_size=self.remove_border_w)
+
 
             # 先通过mask得到bbox，然后对所有图像进行裁剪
             if self.img_process == "zero_padding":
@@ -753,6 +773,6 @@ class SIFT_Track(nn.Module):
         t = Timer(True)
         self.set_data(data)
         t.tick('[test]: set data end')
-        points_assign_mat, pose12 = self.forward()
+        points_assign_mat, pose12,_ = self.forward()
         t.tick('[test]: forward  end')
         return points_assign_mat, pose12

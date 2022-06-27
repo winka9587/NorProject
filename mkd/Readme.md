@@ -570,10 +570,30 @@ next
 
 修改代码，直接用nocs2camera代替gt_part
 
+epoch1
+
+![img_1.png](img_1.png)
+
+![img_2.png](img_2.png)
+
+修改后的模型在测试集上的结果
+
+# 拖尾噪声的影响不可忽视，如果分割网络还没有准备好，可以先按CAPTRA消融mask
+
+但实际做的时候不可能这样做，因为速度实在是太慢了
+
+
 ## 数据集错误
 
 不知道是不是个例，coord_pts与pts拟合出的作为gt的位姿似乎有问题。同时_pose.pkl中的位姿也是错的。这种应该怎么处理？
 
+<a style="color:blue">
+按照NOCS的说法，pts与coord点一一对应，也会出错吗？
+</a>
+
 在这里记录一下，之后有时间写个函数挨个检查：
 
 real_train/scene_4/0462
+
+## 写一个可视化soft_matrix的可视化代码
+
