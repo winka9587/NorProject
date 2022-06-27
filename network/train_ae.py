@@ -342,8 +342,11 @@ def train(opt):
             # 测试eval用
             # if i == 0:
             #     break
-            if i < 10:
-                continue
+
+            # test
+            # if i < 10:
+            #     continue
+
             trainer.set_data(data)
             trainer.update()
 

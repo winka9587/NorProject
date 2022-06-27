@@ -544,8 +544,8 @@ t和R的公式推错了，看打草纸
 
 将model,sRT*model与观测点云pts三个点云同时绘制出来，似乎是有个轴错了
 
-<a style="color:blue">
-[确认了一件事，gt_part的计算是不必要的，只用nocs2camera就行了 ，两个的值完全是一样的]
+<a style="color:deepskyblue">
+[确认了一件事，gt_part的计算是不必要的，只用nocs2camera就行了 ，两个的值完全是一样的，之后有时间修改一下]
 </a>
 
 在CAPTRA的测试代码中，obj模型通过sRT可以与pts重合，只是差个scale
@@ -563,3 +563,9 @@ t和R的公式推错了，看打草纸
 
 结论: 反投影时候SGPA和CAPTRA的像素坐标系uv的原点位置不同，SGPA在左上角，CAPTRA在左下角，
 而nocs2camera位姿针对的是CAPTRA的uv坐标                      
+
+next
+
+旋转R12似乎不对，R12@R12.T似乎都不能算是单位矩阵了，是精度损失的问题？检查了一下发现nocs2camera的精度是float64，gt_part的精度是float32
+
+修改代码，直接用nocs2camera代替gt_part

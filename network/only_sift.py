@@ -605,7 +605,18 @@ class SIFT_Track(nn.Module):
             # 计算两帧之间的gt位姿
             pose_1_bs = last_frame['gt_part']
             pose_2_bs = next_frame['gt_part']
+            pose_1_tmp = last_frame['meta']['nocs2camera'][0]
+            pose_2_tmp = next_frame['meta']['nocs2camera'][0]
 
+            # pose_1_bs
+            #   rotation (10, 1, 3, 3)
+            #   scale   (10, 1)
+            #   translation     (10, 1, 3, 1)
+
+            # pose_1_tmp
+            #   rotation (10, 3, 3)
+            #   scale   (10)
+            #   translation     (10, 3, 1)
 
             pose_12_bs = {}
             # s12 = s2/s1
