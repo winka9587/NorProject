@@ -113,17 +113,12 @@ class Loss(nn.Module):
         return cos_sim_loss.mean().item()
 
     def pose_dict_RT(self, pose_dict):
-        scale = pose_dict['scale']    # (bs, 1)
-        RMatrix = pose_dict['rotation']  # (bs, 3, 3)
-        tVec = pose_dict['translation']  # (bs, 1, 3, 1)
-
-        # sRt_ = torch.zeros((scale.shape[0], 4, 4))
-        # sRt_[:, :3, :3] = RMatrix
-        # sRt_[:, :3, 3] = tVec.squeeze(1).squeeze(-1)
-        # sRt_[:, 3, 3] = 1
+        scale = pose_dict['scale'].cuda()    # (bs)
+        RMatrix = pose_dict['rotation'].cuda()  # (bs, 3, 3)
+        tVec = pose_dict['translation'].cuda()  # (bs, 3, 1)
 
         sR = RMatrix * scale.view((-1, 1, 1))  # (bs, 3, 3)
-        sRt = torch.cat((sR, tVec.transpose(1, 2).squeeze(-1)), 2)  # (bs, 3, 4)
+        sRt = torch.cat((sR, tVec), 2)  # (bs, 3, 4)
         bottom = torch.zeros(RMatrix.shape[0], 1, 4).cuda()  # (bs, 1, 4)
         bottom[:, :, 3] = 1
         sRt01 = torch.cat((sRt, bottom), 1)  # (bs, 4, 4)
@@ -182,7 +177,11 @@ class Loss(nn.Module):
             deltas: bs x nv x 3
             prior: bs x nv x 3
         """
-        model_1, model_2, gt_model_numpy, model_1_12 = m1m2
+
+        # should same with "debug" in only_sift.py
+        debug = False
+        if debug:
+            model_1, model_2, gt_model_numpy, model_1_12, coord_1, coord_2, coord_12 = m1m2
 
         soft_assign_1 = F.softmax(assign_mat_1, dim=2)
         soft_assign_2 = F.softmax(assign_mat_2, dim=2)
@@ -202,10 +201,6 @@ class Loss(nn.Module):
         # gt
         points_1to2_gt = self.multi_pose_with_pts(sRt12_gt, points_1)
         points_2to1_gt = self.multi_pose_with_pts(sRt21_gt, points_2)
-        # debug
-        points_1to2_RI = self.multi_pose_with_pts_debug(sRt12_gt, points_1, 1)
-        points_1to2_tI = self.multi_pose_with_pts_debug(sRt12_gt, points_1, 2)
-        points_1to2_RtI = self.multi_pose_with_pts_debug(sRt12_gt, points_1, 3)
 
 
         # 0. CD loss 能否约束形状？
@@ -238,90 +233,68 @@ class Loss(nn.Module):
 
         total_loss = cd_loss1 + cd_loss2 + corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss + entropy_loss_1v + entropy_loss_2v
 
-        # if corr_loss_1 < 0.10:
-        batch_idx = 0
-        I_matrix = torch.eye(1024).unsqueeze(0).repeat(10, 1, 1)
-        I_gt = torch.eye(4).unsqueeze(0).repeat(10, 1, 1)
-        soft_assign_1 = soft_assign_1.type(torch.float64)
-        points_1 = points_1.type(torch.float64)
-        points_2 = points_2.type(torch.float64)
-        points_1_in_2 = torch.bmm(soft_assign_1, points_2)
-        assigned_points = points_1_in_2[batch_idx].cpu().detach().numpy()
-        points_1 = points_1[batch_idx].cpu().detach().numpy()
-        points_2 = points_2[batch_idx].cpu().detach().numpy()
-        # RGB 颜色已验证没问题
-        color_red = np.array([255, 0, 0])
-        color_green = np.array([0, 255, 0])
-        color_blue = np.array([0, 0, 255])
-        color_blue2 = np.array([0, 0, 100])
-        color_gray = np.array([93, 93, 93])
-        color_black = np.array([255, 255, 255])
-        pts_colors = [color_green, color_red]
+        # 测试及可视化代码
+        if debug:
+            # if corr_loss_1 < 0.10:
+            batch_idx = 0
+            I_matrix = torch.eye(1024).unsqueeze(0).repeat(10, 1, 1)
+            I_gt = torch.eye(4).unsqueeze(0).repeat(10, 1, 1)
+            soft_assign_1 = soft_assign_1.type(torch.float64)
+            points_1 = points_1.type(torch.float64)
+            points_2 = points_2.type(torch.float64)
+            points_1_in_2 = torch.bmm(soft_assign_1, points_2)
+            assigned_points = points_1_in_2[batch_idx].cpu().detach().numpy()
+            points_1 = points_1[batch_idx].cpu().detach().numpy()
+            points_2 = points_2[batch_idx].cpu().detach().numpy()
+            # RGB 颜色已验证没问题
+            color_red = np.array([255, 0, 0])
+            color_green = np.array([0, 255, 0])
+            color_blue = np.array([0, 0, 255])
+            color_blue2 = np.array([0, 0, 100])
+            color_gray = np.array([93, 93, 93])
+            color_black = np.array([255, 255, 255])
+            pts_colors = [color_green, color_red, color_blue]
 
-        # 输入点云1,2，输出重新排序后的2使其与1点对应
-        def sort_corr_points(p1, p2):
-            # 在找points_1和points_2的对应关系
-            p_sort = []
-            ref = []
-            for i in range(p1.shape[0]):
-                xyz = p1[i]
-                tmp = torch.abs(p2 - xyz.unsqueeze(0).repeat(p2.shape[0], 1))
-                tmp = torch.sum(tmp, 1)
-                idx = torch.argmin(tmp)
-                p_sort.append(p2[idx])
-                ref.append(idx)
-            # 合并重排序后的点云，可能会有重复的点(有的点可能没有被选择)
-            p2_resorted = torch.stack(p_sort, dim=0)
-            return ref, p2_resorted
+            render_points_diff_color('points_1:green points_2:red', [coord_1, coord_2, coord_12],
+                                     pts_colors, save_img=False,
+                                     show_img=True)
 
-        mean1 = np.mean(points_1, 0).reshape(1, 3)
-        mean2 = np.mean(points_2, 0).reshape(1, 3)
+            # 输入点云1,2，输出重新排序后的2使其与1点对应
+            # def sort_corr_points(p1, p2):
+            #     # 在找points_1和points_2的对应关系
+            #     p_sort = []
+            #     ref = []
+            #     for i in range(p1.shape[0]):
+            #         xyz = p1[i]
+            #         tmp = torch.abs(p2 - xyz.unsqueeze(0).repeat(p2.shape[0], 1))
+            #         tmp = torch.sum(tmp, 1)
+            #         idx = torch.argmin(tmp)
+            #         p_sort.append(p2[idx])
+            #         ref.append(idx)
+            #     # 合并重排序后的点云，可能会有重复的点(有的点可能没有被选择)
+            #     p2_resorted = torch.stack(p_sort, dim=0)
+            #     return ref, p2_resorted
+            # 得到点之间的对应关系ref， 重新排序后的p2
+            # # ref[i]:j   参数pts1中的第i个点对应pts2中的第j个点
+            # ref, p2_resorted = sort_corr_points(points_1to2_gt[0], torch.from_numpy(points_2).cuda())  # 返回的是两个tensor
 
-        render_points_diff_color('model 1, 2, 1_12',
-                                 [model_1, model_2, model_1_12],
-                                 [color_red, color_green, color_blue],
-                                 save_img=False,
-                                 show_img=True)
-
-        render_points_diff_color('model and pts 1',
-                                 [points_1, model_1, gt_model_numpy],
-                                 [color_red, color_green, color_blue],
-                                 save_img=False,
-                                 show_img=True)
-
-        render_points_diff_color('model and pts 2',
-                                 [points_2, model_2, gt_model_numpy],
-                                 [color_red, color_green, color_blue],
-                                 save_img=False,
-                                 show_img=True)
-
-        # 投影到图像上
-        render_points_diff_color('pts12 and pts12_gt_RtTransform',
-                                 [points_2to1_gt[batch_idx].cpu().numpy(),
-                                  points_1to2_gt[batch_idx].cpu().numpy(),
-                                  points_1,
-                                  points_2],
-                                 [color_green, color_red, color_blue, color_blue2], save_img=False,
-                                 show_img=True)
-
-        ref, p2_rs = sort_corr_points(points_1to2_gt[0], torch.from_numpy(points_2).cuda())  # 返回的是两个tensor
-
-        lines = []
-        offset = len(ref)
-        points_draw = np.vstack((points_1to2_gt[0].cpu().numpy(), p2_rs.cpu().numpy()))
-        for i in range(len(ref)):
-            lines.append([i, ref[i].item() + offset])
-
-        render_lines("sort corr", [points_1to2_gt[0].cpu().numpy(), points_2], pts_colors, points_draw, lines)
-
-        render_points_diff_color('points_1:green points_2:red', [points_1, points_2],
-                                 pts_colors, save_img=False,
-                                 show_img=True)
-        render_points_diff_color('points_1 in 2:green points_2:red', [assigned_points, points_2],
-                                 pts_colors, save_img=False,
-                                 show_img=True)
-        print(soft_assign_1)
-        print(soft_assign_1)
+            # # lines每一个元素是一个元组，记录了两个点云中对应点
+            # lines = []
+            # offset = len(ref)
+            # points_draw = np.vstack((points_1to2_gt[0].cpu().numpy(), p2_rs.cpu().numpy()))
+            # for i in range(len(ref)):
+            #     lines.append([i, ref[i].item() + offset])
+            #
+            # render_lines("sort corr", [points_1to2_gt[0].cpu().numpy(), points_2], pts_colors, points_draw, lines)
+            #
+            # render_points_diff_color('points_1:green points_2:red', [points_1, points_2],
+            #                          pts_colors, save_img=False,
+            #                          show_img=True)
+            # render_points_diff_color('points_1 in 2:green points_2:red', [assigned_points, points_2],
+            #                          pts_colors, save_img=False,
+            #                          show_img=True)
+            # print(soft_assign_1)
+            # print(soft_assign_1)
 
         return total_loss, cd_loss1, cd_loss2, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v
 

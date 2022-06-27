@@ -569,3 +569,11 @@ next
 旋转R12似乎不对，R12@R12.T似乎都不能算是单位矩阵了，是精度损失的问题？检查了一下发现nocs2camera的精度是float64，gt_part的精度是float32
 
 修改代码，直接用nocs2camera代替gt_part
+
+## 数据集错误
+
+不知道是不是个例，coord_pts与pts拟合出的作为gt的位姿似乎有问题。同时_pose.pkl中的位姿也是错的。这种应该怎么处理？
+
+在这里记录一下，之后有时间写个函数挨个检查：
+
+real_train/scene_4/0462

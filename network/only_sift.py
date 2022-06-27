@@ -629,6 +629,19 @@ class SIFT_Track(nn.Module):
                                         (pose_12_bs['scale'].reshape(-1, 1, 1) * \
                                         torch.bmm(pose_12_bs['rotation'], pose_1_bs['translation'].squeeze(1))).unsqueeze(1)
 
+            # tmp
+            pose_12_tmp = {}
+            # scale    (10)
+            pose_12_tmp['scale'] = pose_2_tmp['scale']/pose_1_tmp['scale']
+            # rotation (10, 3, 3)
+            pose_12_tmp['rotation'] = torch.bmm(pose_2_tmp['rotation'],
+                                               pose_1_tmp['rotation'].transpose(-2, -1))
+            # translation (10, 3, 1)
+            pose_12_tmp['translation'] = pose_2_tmp['translation'] - \
+                                        (pose_12_tmp['scale'].reshape(-1, 1, 1) * \
+                                         torch.bmm(pose_12_tmp['rotation'],
+                                                   pose_1_tmp['translation']))
+
             sRt_2 = torch.eye(4)
             sRt_2[:3, :3] = pose_2_bs['scale'][0] * pose_2_bs['rotation'].squeeze(1)[0]
             sRt_2[:3, 3] = pose_2_bs['translation'].squeeze(1).squeeze(-1)[0]
@@ -641,50 +654,63 @@ class SIFT_Track(nn.Module):
             sRt_12[:3, :3] = pose_12_bs['scale'][0] * pose_12_bs['rotation'][0]
             sRt_12[:3, 3] = pose_12_bs['translation'].squeeze(1).squeeze(-1)[0]
 
-            # gt_model_numpy (2048, 3)
-            gt_model_numpy = sample_points_from_mesh('/data1/cxx/Lab_work/dataset/obj_models/real_train/bottle_blue_google_norm.obj', 2048, fps=True, ratio=3)
-            # 好像并不是从模型坐标系到观测点云的
-            # 而是从nocs到观测点云的
-            # 因此应该得到nocs才行
+            # tmp
+            sRt_2_tmp = torch.eye(4)
+            sRt_2_tmp[:3, :3] = pose_2_tmp['scale'][0] * pose_2_tmp['rotation'][0]
+            sRt_2_tmp[:3, 3] = pose_2_tmp['translation'].squeeze(-1)[0]
 
-            model = np.ones((2048, 4))
-            model[:, :3] = gt_model_numpy
+            sRt_1_tmp = torch.eye(4)
+            sRt_1_tmp[:3, :3] = pose_1_tmp['scale'][0] * pose_1_tmp['rotation'][0]
+            sRt_1_tmp[:3, 3] = pose_1_tmp['translation'].squeeze(-1)[0]
 
-            m1 = (sRt_1.numpy() @ model.transpose()).transpose()[:, :3]
-            m2 = (sRt_2.numpy() @ model.transpose()).transpose()[:, :3]
+            sRt_12_tmp = torch.eye(4).type(torch.float64)
+            sRt_12_tmp[:3, :3] = pose_12_tmp['scale'][0] * pose_12_tmp['rotation'][0]
+            sRt_12_tmp[:3, 3] = pose_12_tmp['translation'].squeeze(1).squeeze(-1)[0]
 
-            model_1 = np.ones((2048, 4))
-            model_1[:, :3] = m1
-            m1_12 = (sRt_12.numpy() @ model_1.transpose()).transpose()[:, :3]
+            debug = False
+            # load model
+            if debug:
+                # 位姿并不是从模型坐标系到观测点云的，而是从nocs到观测点云的
+                # 因此应该得到nocs才行
+                # gt_model_numpy (2048, 3)
+                gt_model_numpy = sample_points_from_mesh('/data1/cxx/Lab_work/dataset/obj_models/real_train/bottle_blue_google_norm.obj', 2048, fps=True, ratio=3)
 
-            render_points_diff_color("model", [gt_model_numpy], [np.array([255, 0, 0])])
-            render_points_diff_color("p1 and p2", [m1, m2], [np.array([255, 0, 0]), np.array([0, 255, 0])])
+                model = np.ones((2048, 4))
+                model[:, :3] = gt_model_numpy
 
-            # R1 = pose_1_bs['rotation'][0].squeeze(0)
-            # R2 = pose_2_bs['rotation'][0].squeeze(0)
-            # R12 = pose_12_bs['rotation'][0]
-            # rvec, _ = cv2.Rodrigues(torch.mm(torch.mm(R2, R1.inverse()), R12.inverse()).cpu().numpy())
-            # print(t)
+                m1 = (sRt_1.numpy() @ model.transpose()).transpose()[:, :3]
+                m2 = (sRt_2.numpy() @ model.transpose()).transpose()[:, :3]
 
-            # def get_pose_between_2_frame(pose1, pose2):
-            #     # coord_pts_RT1 = np.matmul(pose1['rotation'], coord_pts_s[0].transpose()).transpose() * pose1['scale'] + pose1['translation'].transpose()
-            #     # prior to pts
-            #     s12 = pose2['scale'] / pose1['scale']
-            #     t12 = pose2['translation'] - pose1['translation']
-            #     if isinstance(pose1['rotation'], torch.Tensor):
-            #         R12 = torch.matmul(pose2['rotation'], pose1['rotation'].transpose())
-            #     else:
-            #         R12 = np.matmul(pose2['rotation'], pose1['rotation'].transpose())
-            #     pose_12 = {}
-            #     pose_12['rotation'] = R12
-            #     pose_12['scale'] = s12
-            #     pose_12['translation'] = t12
+                model_1 = np.ones((2048, 4))
+                model_1[:, :3] = m1
+                m1_12 = (sRt_12.numpy() @ model_1.transpose()).transpose()[:, :3]
+
+                render_points_diff_color("model", [gt_model_numpy], [np.array([255, 0, 0])])
+                render_points_diff_color("p1 and p2", [m1, m2], [np.array([255, 0, 0]), np.array([0, 255, 0])])
+
+                # tmp
+                coord = last_frame['nocs'][0].transpose(-1, -2).cpu().numpy()
+                coord_ = np.ones((4096, 4))
+                coord_[:, :3] = coord
+
+                coord_1 = (sRt_1_tmp.numpy() @ coord_.transpose()).transpose()
+                coord_12 = (sRt_12_tmp.numpy() @ coord_1.transpose()).transpose()[:, :3]
+
+                coord_1 = coord_1[:, :3]
+                coord_2 = (sRt_2_tmp.numpy() @ coord_.transpose()).transpose()[:, :3]
+
+                render_points_diff_color("coord 1, 2, 12", [coord_1, coord_2, coord_12], [np.array([255, 0, 0]), np.array([0, 255, 0]), np.array([0, 0, 255])])
 
         # 检查模型投影到图像上
         print(last_frame['meta']['path'])
 
+        # 测试位姿相关
+        if debug:
+            debug_info = (m1, m2, gt_model_numpy, m1_12, coord_1, coord_2, coord_12)
+        else:
+            debug_info = None
 
-        return points_assign_mat, pose_12_bs, (m1, m2, gt_model_numpy, m1_12)
+        return points_assign_mat, pose_12_tmp, debug_info
 
     def set_data(self, data):
         print('set_data ...')
