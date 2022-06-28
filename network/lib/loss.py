@@ -233,68 +233,87 @@ class Loss(nn.Module):
 
         total_loss = cd_loss1 + cd_loss2 + corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss + entropy_loss_1v + entropy_loss_2v
 
-        # 测试及可视化代码
-        if debug:
-            # if corr_loss_1 < 0.10:
-            batch_idx = 0
-            I_matrix = torch.eye(1024).unsqueeze(0).repeat(10, 1, 1)
-            I_gt = torch.eye(4).unsqueeze(0).repeat(10, 1, 1)
-            soft_assign_1 = soft_assign_1.type(torch.float64)
-            points_1 = points_1.type(torch.float64)
-            points_2 = points_2.type(torch.float64)
-            points_1_in_2 = torch.bmm(soft_assign_1, points_2)
-            assigned_points = points_1_in_2[batch_idx].cpu().detach().numpy()
-            points_1 = points_1[batch_idx].cpu().detach().numpy()
-            points_2 = points_2[batch_idx].cpu().detach().numpy()
-            # RGB 颜色已验证没问题
-            color_red = np.array([255, 0, 0])
-            color_green = np.array([0, 255, 0])
-            color_blue = np.array([0, 0, 255])
-            color_blue2 = np.array([0, 0, 100])
-            color_gray = np.array([93, 93, 93])
-            color_black = np.array([255, 255, 255])
-            pts_colors = [color_green, color_red, color_blue]
+        # # 测试及可视化代码
+        # # if debug:
+        # # if corr_loss_1 < 0.10:
+        # batch_idx = 0
+        # soft_assign_1 = soft_assign_1.type(torch.float64)
+        # points_1 = points_1.type(torch.float64)
+        # points_2 = points_2.type(torch.float64)
+        # points_1_in_2 = torch.bmm(soft_assign_1, points_2)
+        # assigned_points = points_1_in_2[batch_idx].cpu().detach().numpy()
+        # points_1 = points_1[batch_idx].cpu().detach().numpy()
+        # points_2 = points_2[batch_idx].cpu().detach().numpy()
+        # # RGB 颜色已验证没问题
+        # color_red = np.array([255, 0, 0])
+        # color_green = np.array([0, 255, 0])
+        # color_blue = np.array([0, 0, 255])
+        # color_blue2 = np.array([0, 0, 100])
+        # color_gray = np.array([93, 93, 93])
+        # color_black = np.array([255, 255, 255])
+        # pts_colors = [color_green, color_red, color_blue]
 
-            render_points_diff_color('points_1:green points_2:red', [coord_1, coord_2, coord_12],
-                                     pts_colors, save_img=False,
-                                     show_img=True)
-
-            # 输入点云1,2，输出重新排序后的2使其与1点对应
-            # def sort_corr_points(p1, p2):
-            #     # 在找points_1和points_2的对应关系
-            #     p_sort = []
-            #     ref = []
-            #     for i in range(p1.shape[0]):
-            #         xyz = p1[i]
-            #         tmp = torch.abs(p2 - xyz.unsqueeze(0).repeat(p2.shape[0], 1))
-            #         tmp = torch.sum(tmp, 1)
-            #         idx = torch.argmin(tmp)
-            #         p_sort.append(p2[idx])
-            #         ref.append(idx)
-            #     # 合并重排序后的点云，可能会有重复的点(有的点可能没有被选择)
-            #     p2_resorted = torch.stack(p_sort, dim=0)
-            #     return ref, p2_resorted
-            # 得到点之间的对应关系ref， 重新排序后的p2
-            # # ref[i]:j   参数pts1中的第i个点对应pts2中的第j个点
-            # ref, p2_resorted = sort_corr_points(points_1to2_gt[0], torch.from_numpy(points_2).cuda())  # 返回的是两个tensor
-
-            # # lines每一个元素是一个元组，记录了两个点云中对应点
-            # lines = []
-            # offset = len(ref)
-            # points_draw = np.vstack((points_1to2_gt[0].cpu().numpy(), p2_rs.cpu().numpy()))
-            # for i in range(len(ref)):
-            #     lines.append([i, ref[i].item() + offset])
-            #
-            # render_lines("sort corr", [points_1to2_gt[0].cpu().numpy(), points_2], pts_colors, points_draw, lines)
-            #
-            # render_points_diff_color('points_1:green points_2:red', [points_1, points_2],
-            #                          pts_colors, save_img=False,
-            #                          show_img=True)
-            # render_points_diff_color('points_1 in 2:green points_2:red', [assigned_points, points_2],
-            #                          pts_colors, save_img=False,
-            #                          show_img=True)
-            # print(soft_assign_1)
-            # print(soft_assign_1)
+        # def show_corresponse_points(p1, p2):
+        #     # 输入点云1,2，输出重新排序后的2使其与1点对应
+        #     def sort_corr_points(p1_, p2_):
+        #         # 在找points_1和points_2的对应关系
+        #         p_sort = []
+        #         ref = []
+        #         for i in range(p1_.shape[0]):
+        #             xyz = p1_[i]
+        #             tmp = p2_ - xyz.unsqueeze(0).repeat(p2_.shape[0], 1)
+        #             tmp = tmp*tmp
+        #             tmp = torch.sum(tmp, 1)
+        #             idx = torch.argmin(tmp)
+        #             min_value = torch.min(tmp)
+        #             if min_value < 1:
+        #                 p_sort.append(p2_[idx])
+        #                 ref.append(idx)  # 记录与p2的对应，之后有可能用于比较assignmatrix
+        #         # 合并重排序后的点云，可能会有重复的点(有的点可能没有被选择)
+        #         p2_resorted = torch.stack(p_sort, dim=0)
+        #         return ref, p2_resorted
+        #     # 得到点之间的对应关系ref， 重新排序后的p2
+        #     # ref[i]:j   参数pts1中的第i个点对应pts2中的第j个点
+        #     ref, p2_resorted = sort_corr_points(torch.from_numpy(p1).cuda(), torch.from_numpy(p2).cuda())  # 返回的是两个tensor
+        #
+        #     # lines每一个元素是一个元组，记录了两个点云中对应点
+        #     lines = []
+        #     offset = len(ref)
+        #     points_draw = np.vstack((p1, p2))
+        #     for i in range(len(ref)):
+        #         lines.append([i, ref[i].item() + offset])
+        #     # 绘制lines
+        #     render_lines("sort corr", points_draw, lines)
+        #
+        # # 两组点云已经是一一对应了，可视化其差异
+        # def show_diff_between_2_corr_pts(pts1, pts2):
+        #     assert pts1.shape[0] == pts2.shape[0]
+        #     idx = np.arange(pts1.shape[0])
+        #     idx2 = idx + pts1.shape[0]
+        #     lines = []
+        #     points_draw = np.vstack((pts1, pts2))
+        #     for i in range(pts1.shape[0]):
+        #         lines.append([idx[i], idx2[i]])
+        #     render_lines("diff between 2 corr pts", points_draw, lines)
+        #
+        # show_diff_between_2_corr_pts(points_1to2_gt[batch_idx].cpu().numpy(),
+        #                              points_1_in_2[batch_idx].cpu().detach().numpy())
+        # show_diff_between_2_corr_pts(points_2to1_gt[batch_idx].cpu().numpy(),
+        #                              points_2_in_1[batch_idx].cpu().detach().numpy())
+        #
+        # show_corresponse_points(points_1to2_gt[batch_idx].cpu().numpy(), points_2)
+        #
+        # # render_points_diff_color('points_1:green points_2:red', [points_1, points_2],
+        # #                          pts_colors, save_img=False,
+        # #                          show_img=True)
+        # # render_points_diff_color('points_1 in 2:green points_2:red', [assigned_points, points_2],
+        # #                          pts_colors, save_img=False,
+        # #                          show_img=True)
+        # render_points_diff_color('points_1:green points_2:red', [points_1to2_gt[batch_idx].cpu().numpy(), points_2],
+        #                                                   [color_green, color_red], save_img=False,
+        #                                                   show_img=True)
+        # print(soft_assign_1)
+        # print(soft_assign_1)
 
         return total_loss, cd_loss1, cd_loss2, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v
 

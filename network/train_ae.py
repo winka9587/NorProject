@@ -271,9 +271,9 @@ parser.add_argument('--optimizer', type=str, default='Adam', help='Adam or SGD')
 parser.add_argument('--learning_rate', type=float, default=0.0001, help='initial learning rate')
 parser.add_argument('--result_dir', type=str, default='results/Real', help='directory to save train results')
 parser.add_argument('--max_epoch', type=int, default=25, help='max number of epochs to train')
-parser.add_argument('--start_epoch', type=int, default=2, help='which epoch to start')
-parser.add_argument('--resume_model', type=str, default='', help='load model')
-# parser.add_argument('--resume_model', type=str, default='../results/Real/model_cat1_03.pth', help='load model')
+parser.add_argument('--start_epoch', type=int, default=9, help='which epoch to start')
+# parser.add_argument('--resume_model', type=str, default='', help='load model')
+parser.add_argument('--resume_model', type=str, default='../results/Real/without_remove_border/model_cat1_08.pth', help='load model')
 
 # parser.add_argument('--dataset', type=str, default='CAMERA+Real', help='CAMERA or CAMERA+Real')
 # parser.add_argument('--data_dir', type=str, default='data', help='data directory')
@@ -331,7 +331,7 @@ def train(opt):
     num_points = 1024
 
 
-    trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt)
+    trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt, remove_border_w=-1)
     # trainer = torch.nn.DataParallel(trainer, device_ids)
     trainer.cuda()
     if opt.resume_model != '':

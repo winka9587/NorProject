@@ -1076,26 +1076,26 @@ def render_points_diff_color(name, pts_list, color_list, save_img = True, show_i
 #               [0, 1, 1], [1, 1, 1]]
 #     lines = [[0, 1], [0, 2], [1, 3], [2, 3], [4, 5], [4, 6], [5, 7], [6, 7],
 #              [0, 4], [1, 5], [2, 6], [3, 7]]
-def render_lines(name, pts_list, color_list, points, lines):
+def render_lines(name, points, lines):
     vis = o3d.visualization.Visualizer()
     vis.create_window(window_name=name, width=512, height=512, left=50, top=25)
     opt = vis.get_render_option()
     opt.show_coordinate_frame = True
-    assert len(pts_list) == len(color_list)
-    pcds = []
-    for index in range(len(pts_list)):
-        pcd = o3d.geometry.PointCloud()
-        pts = pts_list[index]
-        color = color_list[index]
-        if np.any(color > 1.0):
-            color = color.astype(float) / 255.0
-        colors = np.tile(color, (pts.shape[0], 1))  # 将color扩大为 (pts.shape[0], 1)
-        pcd.points = o3d.utility.Vector3dVector(pts)
-        pcd.colors = o3d.utility.Vector3dVector(colors)
-        pcds.append(pcd)
-        vis.add_geometry(pcd)
-    ctr = vis.get_view_control()
-    ctr.rotate(-300.0, 150.0)
+    # assert len(pts_list) == len(color_list)
+    # pcds = []
+    # for index in range(len(pts_list)):
+    #     pcd = o3d.geometry.PointCloud()
+    #     pts = pts_list[index]
+    #     color = color_list[index]
+    #     if np.any(color > 1.0):
+    #         color = color.astype(float) / 255.0
+    #     colors = np.tile(color, (pts.shape[0], 1))  # 将color扩大为 (pts.shape[0], 1)
+    #     pcd.points = o3d.utility.Vector3dVector(pts)
+    #     pcd.colors = o3d.utility.Vector3dVector(colors)
+    #     pcds.append(pcd)
+    #     vis.add_geometry(pcd)
+    # ctr = vis.get_view_control()
+    # ctr.rotate(-300.0, 150.0)
 
     colors = [[1, 0, 0] for i in range(len(lines))]
     line_set = o3d.geometry.LineSet()
@@ -1103,8 +1103,8 @@ def render_lines(name, pts_list, color_list, points, lines):
     line_set.lines = o3d.utility.Vector2iVector(lines)
     line_set.colors = o3d.utility.Vector3dVector(colors)
     o3d.visualization.draw_geometries([line_set])
-    vis.run()
-    vis.destroy_window()
+    # vis.run()
+    # vis.destroy_window()
 
 
 
