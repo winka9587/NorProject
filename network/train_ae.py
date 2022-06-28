@@ -15,9 +15,11 @@ from network.only_sift import SIFT_Track
 from lib.utils import pose_fit, render_points_diff_color
 import torch.nn.functional as F
 from functools import reduce
+
+from tensorboardX import SummaryWriter
+
 parser = argparse.ArgumentParser()
 # lr_policy
-
 # little utils
 from utils import Timer
 from tqdm import tqdm
@@ -271,9 +273,10 @@ parser.add_argument('--optimizer', type=str, default='Adam', help='Adam or SGD')
 parser.add_argument('--learning_rate', type=float, default=0.0001, help='initial learning rate')
 parser.add_argument('--result_dir', type=str, default='results/Real', help='directory to save train results')
 parser.add_argument('--max_epoch', type=int, default=25, help='max number of epochs to train')
-parser.add_argument('--start_epoch', type=int, default=9, help='which epoch to start')
-# parser.add_argument('--resume_model', type=str, default='', help='load model')
-parser.add_argument('--resume_model', type=str, default='../results/Real/without_remove_border/model_cat1_08.pth', help='load model')
+parser.add_argument('--log_path', type=str, default='../results/Real/', help='path to save tensorboard log file')
+parser.add_argument('--start_epoch', type=int, default=1, help='which epoch to start')
+parser.add_argument('--resume_model', type=str, default='', help='load model')
+# parser.add_argument('--resume_model', type=str, default='../results/Real/without_remove_border/model_cat1_19.pth', help='load model')
 
 # parser.add_argument('--dataset', type=str, default='CAMERA+Real', help='CAMERA or CAMERA+Real')
 # parser.add_argument('--data_dir', type=str, default='data', help='data directory')
@@ -299,7 +302,7 @@ def train(opt):
     result_path = '/data1/cxx/Lab_work/results'  # 保存数据集的预处理结果
     obj_category = '1'  # 类id, 当前模型仅针对该类进行训练
     mode = 'real_train'
-    num_expr = 'RemoveBorder5'  # 实验编号
+    num_expr = 'origin'  # 实验编号
     subseq_len = 2
     device = torch.device("cuda:0")
     train_dataset = RealSeqDataset(dataset_path=dataset_path,
@@ -318,6 +321,7 @@ def train(opt):
                                    device=device)
     print(f'Successfully Load NOCSDataSet {num_expr}_{mode}_{obj_category}')
 
+    writer = SummaryWriter(opt.log_path)
 
     batch_size = 10
     total_epoch = 250
@@ -331,7 +335,7 @@ def train(opt):
     num_points = 1024
 
 
-    trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt, remove_border_w=-1)
+    trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt, remove_border_w=-1, tb_writer=writer)
     # trainer = torch.nn.DataParallel(trainer, device_ids)
     trainer.cuda()
     if opt.resume_model != '':
@@ -348,7 +352,7 @@ def train(opt):
             #     continue
 
             trainer.set_data(data)
-            trainer.update()
+            trainer.update(epoch, i)
 
             # print(data['path'])
             # if 'real' in mode:

@@ -157,7 +157,8 @@ def choose_from_mask_bs(mask_bs, n_pts):
 
 
 class SIFT_Track(nn.Module):
-    def __init__(self, device, real, subseq_len=2, mode='train', opt=None, img_size=192, remove_border_w=5):
+    def __init__(self, device, real, subseq_len=2, mode='train', opt=None, img_size=192, remove_border_w=5, tb_writer=None):
+        self.writer = tb_writer  # tensorboard writer
         super(SIFT_Track, self).__init__()
         # self.fc1 = nn.Linear(emb_dim, 512)
         # self.fc2 = nn.Linear(512, 1024)
@@ -206,7 +207,7 @@ class SIFT_Track(nn.Module):
         cd_wt = 5.0
         entropy_wt = 0.0001
         deform_wt = 0.01
-        self.criterion = Loss(corr_wt, cd_wt, entropy_wt, deform_wt)  # SPD 的loss
+        self.criterion = Loss(corr_wt, cd_wt, entropy_wt, deform_wt, self.writer)  # SPD 的loss
 
         # 反投影用
         self.xmap = np.array([[i for i in range(640)] for j in range(480)])
@@ -745,7 +746,7 @@ class SIFT_Track(nn.Module):
             # self.npcs_feed_dict.append(self.convert_subseq_frame_npcs_data(frame))
         print('set_data end')
 
-    def update(self):
+    def update(self, epoch, step):
         print('forwarding ...')
         points_assign_mat, pose12, m1m2 = self.forward()
         print('forward end')
@@ -754,7 +755,7 @@ class SIFT_Track(nn.Module):
             # 寻找coord的对应关系
 
             print('computing loss')
-            loss = self.criterion(points_assign_mat, pose12, m1m2)
+            loss = self.criterion(points_assign_mat, pose12, m1m2, epoch, step)
             print('compute loss end')
             print(f'loss: {loss}')
             self.optimizer.zero_grad()
