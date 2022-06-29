@@ -746,7 +746,7 @@ class SIFT_Track(nn.Module):
             # self.npcs_feed_dict.append(self.convert_subseq_frame_npcs_data(frame))
         print('set_data end')
 
-    def update(self, epoch, step):
+    def update(self, message):
         print('forwarding ...')
         points_assign_mat, pose12, m1m2 = self.forward()
         print('forward end')
@@ -755,19 +755,16 @@ class SIFT_Track(nn.Module):
             # 寻找coord的对应关系
 
             print('computing loss')
-            loss = self.criterion(points_assign_mat, pose12, m1m2, epoch, step)
+            loss = self.criterion(points_assign_mat, pose12, m1m2, message)
             print('compute loss end')
             print(f'loss: {loss}')
             self.optimizer.zero_grad()
             loss.backward()
+
+            # self.writer.add_scalar('grad/epoch{0}'.format(message['epoch']), loss.grad, message['step'])  # 记录梯度
+
             self.optimizer.step()
             print('backward end')
-        # 调用forward,并计算loss
-        # self.forward(save=save)
-        # if not no_eval:
-        #     self.compute_loss(test=True, per_instance=save, eval_iou=True, test_prefix='test')
-        # else:
-        #     self.loss_dict = {}
 
     def test(self, data):
         self.eval()

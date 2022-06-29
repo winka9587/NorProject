@@ -223,17 +223,11 @@ class Loss(nn.Module):
         # 3. A1和A2应当互逆
         reciprocal_loss = self.get_cos_sim_loss(assign_mat_1, assign_mat_2)
 
-        # loss weight
-        corr_loss_1 = 1.0 * corr_loss_1
-        corr_loss_2 = 1.0 * corr_loss_2
-        entropy_loss_1 = 1.0 * entropy_loss_1
-        entropy_loss_2 = 1.0 * entropy_loss_2
-        entropy_loss_1v = 1.0 * entropy_loss_1v
-        entropy_loss_2v = 1.0 * entropy_loss_2v
-        reciprocal_loss = 1.0 * reciprocal_loss
+        entropy_loss_1v = 0
+        entropy_loss_2v = 0
+        reciprocal_loss = 0
 
         total_loss = cd_loss1 + cd_loss2 + corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss + entropy_loss_1v + entropy_loss_2v
-
 
 
         # # 测试及可视化代码
@@ -302,20 +296,31 @@ class Loss(nn.Module):
         #
         # show_diff_between_2_corr_pts(points_1to2_gt[batch_idx].cpu().numpy(),
         #                              points_1_in_2[batch_idx].cpu().detach().numpy())
-        # show_diff_between_2_corr_pts(points_2to1_gt[batch_idx].cpu().numpy(),
-        #                              points_2_in_1[batch_idx].cpu().detach().numpy())
+        # # show_diff_between_2_corr_pts(points_2to1_gt[batch_idx].cpu().numpy(),
+        # #                              points_2_in_1[batch_idx].cpu().detach().numpy())
         #
         # points_2_resorted = show_corresponse_points(points_1to2_gt[batch_idx].cpu().numpy(), points_2)
         #
         # gt_loss = self.get_corr_loss(points_1to2_gt[batch_idx].cuda().unsqueeze(0), points_2_resorted.unsqueeze(0))
         #
-        # # 如果让points1in2中的每个点都朝着gt移动一段距离loss会增大吗？
+        # # 如果让points1in2中的每个点都朝着gt对应点移动一段距离,loss会增大吗？
         # p1in2 = points_1_in_2[batch_idx]
         # p1to2_gt = points_1to2_gt[batch_idx]
-        #
         # d = p1to2_gt - p1in2
+        # # d_len = torch.norm(d, p=2, dim=1, keepdim=True)
+        # # d = d/d_len  # 方向向量
+        # moved_p1in2 = p1in2 + 0.1*d  # 每个点向gt移动百分比
+        # render_points_diff_color('before and after move assignmatrix', [p1to2_gt.cpu().numpy(), p1in2.detach().cpu().numpy(), moved_p1in2.cpu().detach().numpy()],
+        #                          [color_blue, color_green, color_red], save_img=False,
+        #                          show_img=True)
         #
-        #
+        # t0 = self.get_corr_loss(p1to2_gt.unsqueeze(0), p1in2.unsqueeze(0))
+        # t1 = self.get_corr_loss(p1to2_gt.unsqueeze(0), moved_p1in2.unsqueeze(0))
+        # t0_cd = self.chamferloss(p1to2_gt.unsqueeze(0).type(torch.float32).contiguous(),
+        #                          p1in2.unsqueeze(0).type(torch.float32))
+        # t1_cd = self.chamferloss(p1to2_gt.unsqueeze(0).type(torch.float32).contiguous(),
+        #                          moved_p1in2.unsqueeze(0).type(torch.float32))
+        # print("corr:{0}, {1}, {2}, {3}".format(t0.item(), t1.item(), t0_cd[0].item(), t1_cd[0].item()))
         # # render_points_diff_color('points_1:green points_2:red', [points_1, points_2],
         # #                          pts_colors, save_img=False,
         # #                          show_img=True)
@@ -330,7 +335,7 @@ class Loss(nn.Module):
 
         return total_loss, cd_loss1, cd_loss2, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v
 
-    def forward(self, points_assign_mat_list, pose12_gt, m1m2, epoch, step):
+    def forward(self, points_assign_mat_list, pose12_gt, m1m2, message):
         total_loss = 0.0
         for frame_pair in points_assign_mat_list:
             points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2 = frame_pair
@@ -347,15 +352,17 @@ class Loss(nn.Module):
                   "reciprocal_loss:{4}\n".format(corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v, cd_loss1, cd_loss2))
             total_loss += 1.0 * frame_total_loss
 
-            self.writer.add_scalar('total_loss/epoch{0}'.format(epoch), total_loss, step)
-            self.writer.add_scalars('CD_loss_/epoch{0}'.format(epoch), {"cd_1": cd_loss1,
-                                                                        "cd_2": cd_loss2}, step)
-            self.writer.add_scalars('Corr_loss/epoch{0}'.format(epoch), {"corr_1": corr_loss_1,
-                                                                         "corr_2": corr_loss_2}, step)
-            self.writer.add_scalars('Entropy_loss/epoch{0}'.format(epoch), {"entropy_loss_1": entropy_loss_1,
-                                                                            "entropy_loss_2": entropy_loss_2}, step)
-            self.writer.add_scalar('reciprocal_loss/epoch{0}'.format(epoch), reciprocal_loss, step)
-
+            exp_name = message['exp_name']
+            epoch = message['epoch']
+            step = message['step']
+            self.writer.add_scalar('total_loss/{0}_epoch'.format(exp_name), total_loss, (epoch-1)*312+step)
+            self.writer.add_scalars('CD_loss_/{0}_epoch'.format(exp_name),
+                                    {"cd_1": cd_loss1, "cd_2": cd_loss2}, (epoch-1)*312+step)
+            self.writer.add_scalars('Corr_loss/{0}_epoch'.format(exp_name),
+                                    {"corr_1": corr_loss_1, "corr_2": corr_loss_2}, (epoch-1)*312+step)
+            self.writer.add_scalars('Entropy_loss/{0}_epoch'.format(exp_name),
+                                    {"entropy_loss_1": entropy_loss_1, "entropy_loss_2": entropy_loss_2}, (epoch-1)*312+(epoch-1)*312+step)
+            self.writer.add_scalar('reciprocal_loss/{0}_epoch'.format(exp_name), reciprocal_loss, (epoch-1)*312+step)
 
         return total_loss
 

@@ -13,12 +13,13 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 print(os.path.dirname(os.path.abspath(__file__)))
 from network.only_sift import SIFT_Track
 from lib.utils import pose_fit, render_points_diff_color
+import torch.nn as nn
 import torch.nn.functional as F
 from functools import reduce
 
 from tensorboardX import SummaryWriter
 
-parser = argparse.ArgumentParser()
+
 # lr_policy
 # little utils
 from utils import Timer
@@ -263,9 +264,10 @@ def test_coord_correspondence2():
     tmp = coord_p0 - coord_p
     print(f'if {len(np.where(tmp==0)[0])} == {coord_p.shape[0]*coord_p.shape[1]*coord_p.shape[2]} ? ')
 
-
-
-
+parser = argparse.ArgumentParser()
+parser.add_argument('--batch_size', type=int, default=10, help='batch size')
+parser.add_argument('--num_workers', type=int, default=0, help='number of data loading workers')
+parser.add_argument('--gpu', type=str, default='0,1', help='GPU to use')
 parser.add_argument('--lr_policy', type=str, default='step', help='')
 parser.add_argument('--lr_step_size', type=str, default='step', help='')
 parser.add_argument('--lr_gamma', type=str, default='step', help='')
@@ -276,7 +278,7 @@ parser.add_argument('--max_epoch', type=int, default=25, help='max number of epo
 parser.add_argument('--log_path', type=str, default='../results/Real/', help='path to save tensorboard log file')
 parser.add_argument('--start_epoch', type=int, default=1, help='which epoch to start')
 parser.add_argument('--resume_model', type=str, default='', help='load model')
-# parser.add_argument('--resume_model', type=str, default='../results/Real/without_remove_border/model_cat1_19.pth', help='load model')
+# parser.add_argument('--resume_model', type=str, default='../results/Real/model_cat1_23.pth', help='load model')
 
 # parser.add_argument('--dataset', type=str, default='CAMERA+Real', help='CAMERA or CAMERA+Real')
 # parser.add_argument('--data_dir', type=str, default='data', help='data directory')
@@ -284,7 +286,7 @@ parser.add_argument('--resume_model', type=str, default='', help='load model')
 # parser.add_argument('--n_cat', type=int, default=6, help='number of object categories')
 # parser.add_argument('--nv_prior', type=int, default=1024, help='number of vertices in shape priors')
 # parser.add_argument('--img_size', type=int, default=192, help='cropped image size')
-# parser.add_argument('--batch_size', type=int, default=24, help='batch size')
+
 # parser.add_argument('--num_workers', type=int, default=8, help='number of data loading workers')
 # parser.add_argument('--gpu', type=str, default='0,1', help='GPU to use')
 # parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
@@ -302,7 +304,7 @@ def train(opt):
     result_path = '/data1/cxx/Lab_work/results'  # 保存数据集的预处理结果
     obj_category = '1'  # 类id, 当前模型仅针对该类进行训练
     mode = 'real_train'
-    num_expr = 'origin'  # 实验编号
+    num_expr = 'cd5_weight_remove_regularV_and_retro_Loss'  # 实验编号
     subseq_len = 2
     device = torch.device("cuda:0")
     train_dataset = RealSeqDataset(dataset_path=dataset_path,
@@ -323,13 +325,9 @@ def train(opt):
 
     writer = SummaryWriter(opt.log_path)
 
-    batch_size = 10
-    total_epoch = 250
     shuffle = (mode == 'train')  # 是否打乱
-    shuffle = False
-    num_workers = 0
-    train_dataloader = DataLoader(train_dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
-    test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=num_workers)
+    train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=shuffle, num_workers=opt.num_workers)
+    test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=opt.num_workers)
 
     emb_dim = 512
     num_points = 1024
@@ -338,6 +336,7 @@ def train(opt):
     trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt, remove_border_w=-1, tb_writer=writer)
     # trainer = torch.nn.DataParallel(trainer, device_ids)
     trainer.cuda()
+    # trainer = nn.DataParallel(trainer)
     if opt.resume_model != '':
         trainer.load_state_dict(torch.load(opt.resume_model))
         print(f'load resume model from {opt.resume_model}')
@@ -352,7 +351,11 @@ def train(opt):
             #     continue
 
             trainer.set_data(data)
-            trainer.update(epoch, i)
+            message = {}
+            message['exp_name'] = num_expr
+            message['epoch'] = epoch
+            message['step'] = i
+            trainer.update(message)
 
             # print(data['path'])
             # if 'real' in mode:
@@ -367,8 +370,8 @@ def train(opt):
             # 在forward中 ,首先用mask add_border,然后裁剪depth，输入normalspeed
         # 保存模型
         model_save_path = os.path.join(os.path.abspath('..'), opt.result_dir)
-        torch.save(trainer.state_dict(), '{0}/model_cat{1}_{2:02d}.pth'.format(model_save_path, obj_category, epoch))
-        print('train end, save model to {0}/model_cat{1}_{2:02d}.pth'.format(model_save_path, obj_category, epoch))
+        torch.save(trainer.state_dict(), '{0}/{3}_model_cat{1}_{2:02d}.pth'.format(model_save_path, obj_category, epoch, num_expr))
+        print('train end, save model to {0}/{3}_model_cat{1}_{2:02d}.pth'.format(model_save_path, obj_category, epoch, num_expr))
 
         # # 测试
         # test_loss = {}
