@@ -235,6 +235,7 @@ class Loss(nn.Module):
         # # if corr_loss_1 < 0.10:
         # batch_idx = 0
         # soft_assign_1 = soft_assign_1.type(torch.float64)
+        # soft_assign_2 = soft_assign_2.type(torch.float64)
         # points_1 = points_1.type(torch.float64)
         # points_2 = points_2.type(torch.float64)
         # points_1_in_2 = torch.bmm(soft_assign_1, points_2)
@@ -304,6 +305,16 @@ class Loss(nn.Module):
         # gt_loss = self.get_corr_loss(points_1to2_gt[batch_idx].cuda().unsqueeze(0), points_2_resorted.unsqueeze(0))
         #
         # # 如果让points1in2中的每个点都朝着gt对应点移动一段距离,loss会增大吗？
+        #
+        # soft_assign_max = soft_assign_1.clone()[0]
+        # max_value, max_idx = torch.max(soft_assign_max, 1)
+        # # 将max的改成1，其他的改成0，然后看看点云
+        # max_assign = torch.zeros(soft_assign_max.shape).type(torch.float64)
+        # for i in range(len(max_idx)):
+        #     print('[{0}] : {1}'.format(max_idx[i].item(), max_value[i].item()))
+        #     max_assign[i, max_idx[i].item()] = 1.0
+        # p1in2_max = torch.mm(max_assign, torch.from_numpy(points_2))
+        #
         # p1in2 = points_1_in_2[batch_idx]
         # p1to2_gt = points_1to2_gt[batch_idx]
         # d = p1to2_gt - p1in2
@@ -312,6 +323,11 @@ class Loss(nn.Module):
         # moved_p1in2 = p1in2 + 0.1*d  # 每个点向gt移动百分比
         # render_points_diff_color('before and after move assignmatrix', [p1to2_gt.cpu().numpy(), p1in2.detach().cpu().numpy(), moved_p1in2.cpu().detach().numpy()],
         #                          [color_blue, color_green, color_red], save_img=False,
+        #                          show_img=True)
+        #
+        # render_points_diff_color('极端p1in2 与 p1to2_gt',
+        #                          [p1to2_gt.cpu().numpy(), p1in2_max.detach().cpu().numpy()],
+        #                          [color_blue, color_green], save_img=False,
         #                          show_img=True)
         #
         # t0 = self.get_corr_loss(p1to2_gt.unsqueeze(0), p1in2.unsqueeze(0))
