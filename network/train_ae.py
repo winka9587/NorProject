@@ -16,7 +16,7 @@ from lib.utils import pose_fit, render_points_diff_color
 import torch.nn as nn
 import torch.nn.functional as F
 from functools import reduce
-
+from lib.loss import Loss
 from tensorboardX import SummaryWriter
 
 
@@ -267,7 +267,7 @@ def test_coord_correspondence2():
 parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size', type=int, default=10, help='batch size')
 parser.add_argument('--num_workers', type=int, default=0, help='number of data loading workers')
-parser.add_argument('--gpu', type=str, default='0,1', help='GPU to use')
+parser.add_argument('--gpu', type=str, default='0, 1, 2, 3', help='GPU to use')
 parser.add_argument('--lr_policy', type=str, default='step', help='')
 parser.add_argument('--lr_step_size', type=str, default='step', help='')
 parser.add_argument('--lr_gamma', type=str, default='step', help='')
@@ -304,8 +304,10 @@ def train(opt):
     result_path = '/data1/cxx/Lab_work/results'  # 保存数据集的预处理结果
     obj_category = '1'  # 类id, 当前模型仅针对该类进行训练
     mode = 'real_train'
-    num_expr = 'cd5_weight_remove_regularV_and_retro_Loss'  # 实验编号
+    num_expr = 'TwoFrameSame'  # 实验编号
     subseq_len = 2
+
+
     device = torch.device("cuda:0")
     train_dataset = RealSeqDataset(dataset_path=dataset_path,
                           result_path=result_path,
@@ -333,10 +335,24 @@ def train(opt):
     num_points = 1024
 
 
-    trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt, remove_border_w=-1, tb_writer=writer)
-    # trainer = torch.nn.DataParallel(trainer, device_ids)
+    # trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt, remove_border_w=-1, tb_writer=writer)
+    trainer = SIFT_Track(real=('real' in mode), mode='train', opt=opt, remove_border_w=-1, tb_writer=writer)
+    # Loss
+    corr_wt = 1.0
+    cd_wt = 5.0
+    entropy_wt = 0.0001
+    deform_wt = 0.01
+    criterion = Loss(corr_wt, cd_wt, entropy_wt, deform_wt, writer)  # SPD 的loss
+
+
     trainer.cuda()
     # trainer = nn.DataParallel(trainer)
+    # trainer = torch.nn.DataParallel(trainer, device_ids=device_ids)
+
+    # Optimizer
+    optimizer = torch.optim.Adam(trainer.parameters(), lr=opt.learning_rate)
+
+
     if opt.resume_model != '':
         trainer.load_state_dict(torch.load(opt.resume_model))
         print(f'load resume model from {opt.resume_model}')
@@ -349,13 +365,21 @@ def train(opt):
             # test
             # if i < 100:
             #     continue
+            data[1] = data[0]
 
-            trainer.set_data(data)
             message = {}
             message['exp_name'] = num_expr
             message['epoch'] = epoch
             message['step'] = i
-            trainer.update(message)
+
+            points_assign_mat, pose12, m1m2 = trainer(data)
+            loss = criterion(points_assign_mat, pose12, m1m2, message)
+            print('compute loss end')
+            print(f'loss: {loss}')
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
 
             # print(data['path'])
             # if 'real' in mode:

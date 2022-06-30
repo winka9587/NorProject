@@ -159,6 +159,18 @@ def cvt_torch(x, device):
     elif x is None:
         return None
 
+def cvt_torch2(x):
+    if isinstance(x, np.ndarray):
+        return torch.tensor(x).float().cuda()
+    elif isinstance(x, torch.Tensor):
+        return x.float().cuda()
+    elif isinstance(x, dict):
+        return {key: cvt_torch2(value) for key, value in x.items()}
+    elif isinstance(x, list):
+        return [cvt_torch2(item) for item in x]
+    elif x is None:
+        return None
+
 
 # get square image crop window pos
 def get_bbox(bbox):

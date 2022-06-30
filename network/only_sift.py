@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from part_dof_utils import part_model_batch_to_part, eval_part_full, add_noise_to_part_dof, \
     compute_parts_delta_pose
-from utils import cvt_torch, Timer, add_border_bool_by_crop_pos, get_bbox
+from utils import cvt_torch2, Timer, add_border_bool_by_crop_pos, get_bbox
 from network.lib.utils import crop_img
 import numpy as np
 from extract_2D_kp import extract_sift_kp_from_RGB, sift_match
@@ -18,7 +18,6 @@ from network.lib.utils import sample_points_from_mesh, render_points_diff_color
 
 from lib.pspnet import PSPNet
 from lib.pointnet import Pointnet2MSG
-from lib.loss import Loss
 
 from torch.optim import lr_scheduler
 import torchvision.transforms as transforms
@@ -157,7 +156,7 @@ def choose_from_mask_bs(mask_bs, n_pts):
 
 
 class SIFT_Track(nn.Module):
-    def __init__(self, device, real, subseq_len=2, mode='train', opt=None, img_size=192, remove_border_w=5, tb_writer=None):
+    def __init__(self, real, subseq_len=2, mode='train', opt=None, img_size=192, remove_border_w=5, tb_writer=None):
         self.writer = tb_writer  # tensorboard writer
         super(SIFT_Track, self).__init__()
         # self.fc1 = nn.Linear(emb_dim, 512)
@@ -166,7 +165,7 @@ class SIFT_Track(nn.Module):
         self.remove_border_w = remove_border_w
         self.mode = mode
         self.subseq_len = subseq_len
-        self.device = device
+        # self.device = device
         self.num_parts = 1
         self.num_joints = 0
         # self.matcher = cv2.BFMatcher(cv2.NORM_L2)
@@ -202,12 +201,6 @@ class SIFT_Track(nn.Module):
             nn.ReLU(),
             nn.Conv1d(256, self.n_pts, 1),
         )
-        # Loss
-        corr_wt = 1.0
-        cd_wt = 5.0
-        entropy_wt = 0.0001
-        deform_wt = 0.01
-        self.criterion = Loss(corr_wt, cd_wt, entropy_wt, deform_wt, self.writer)  # SPD 的loss
 
         # 反投影用
         self.xmap = np.array([[i for i in range(640)] for j in range(480)])
@@ -235,8 +228,6 @@ class SIFT_Track(nn.Module):
         # ])
         # self.ds_sr = [4, 8, 8, 8]
 
-        self.optimizer = torch.optim.Adam(self.parameters(), lr=opt.learning_rate)
-        self.epoch = 0
         self.loss_dict = {}
 
 
@@ -252,14 +243,12 @@ class SIFT_Track(nn.Module):
             if key in ['meta']:
                 pass
             elif key in ['labels']:
-                item = item.long().to(self.device)
+                item = item.long().cuda()
+                # item = item.long().to(self.device)
             else:
-                item = item.float().to(self.device)
+                item = item.float().cuda()
+                # item = item.float().to(self.device)
             feed_frame[key] = item
-        gt_part = part_model_batch_to_part(cvt_torch(frame['meta']['nocs2camera'], self.device), self.num_parts,
-                                           self.device)
-        feed_frame.update({'gt_part': gt_part})
-
         return feed_frame
 
 
@@ -271,22 +260,18 @@ class SIFT_Track(nn.Module):
     # points_mean *     (10,3,1)
     # npcs *            (10,3,4096)
     def convert_subseq_frame_data(self, data):
-        # 计算gt位姿
-        gt_part = part_model_batch_to_part(cvt_torch(data['meta']['nocs2camera'], self.device), self.num_parts,
-                                           self.device)
         # 观测点云,观测点云平均点,gt位姿
         input = {'points': data['points'],
-                 'points_mean': data['meta']['points_mean'],
-                 'gt_part': gt_part}
+                 'points_mean': data['meta']['points_mean']}
         # 添加nocs点云
         if 'nocs' in data:
-            input['npcs'] = data['nocs']
-        input = cvt_torch(input, self.device)
+            input['nocs'] = data['nocs']
+        input = cvt_torch2(input)
         # 添加meta
         input['meta'] = data['meta']
         # 添加labels
         if 'labels' in data:
-            input['labels'] = data['labels'].long().to(self.device)
+            input['labels'] = data['labels'].long().cuda()
         return input
 
     # 最终的input包含:
@@ -303,11 +288,11 @@ class SIFT_Track(nn.Module):
             elif key in ['meta']:
                 pass
             elif key in ['labels']:
-                item = item.long().to(self.device)
+                item = item.long().cuda()
             else:
-                item = item.float().to(self.device)
+                item = item.float().cuda()
             input[key] = item
-        input['points_mean'] = data['meta']['points_mean'].float().to(self.device)
+        input['points_mean'] = data['meta']['points_mean'].float().cuda()
         return input
 
     # 估计对应矩阵
@@ -384,7 +369,7 @@ class SIFT_Track(nn.Module):
                 rmax = bbox['rmax']
                 cmin = bbox['cmin']
                 cmax = bbox['cmax']
-                img_cropped = color[rmin:rmax, cmin:cmax].numpy()
+                img_cropped = color[rmin:rmax, cmin:cmax].cpu().numpy()
                 img_cropped = cv2.resize(img_cropped, (self.img_size, self.img_size), interpolation=cv2.INTER_LINEAR)
                 img_cropped = norm_color(img_cropped)
                 # img_bs[batch_idx] = img_cropped
@@ -392,7 +377,7 @@ class SIFT_Track(nn.Module):
                 timer_1.tick('single batch | crop img')
 
             # 从mask获得choose
-            mask = np.logical_and(mask, depth > 0)
+            mask = torch.logical_and(mask, depth > 0)
             # choose是bbox裁剪后的mask生成的，但是可以直接用来读取裁剪后图像上的坐标
             # 如果想要读取原大小图像上的像素点， 会有问题
             choose = mask[rmin:rmax, cmin:cmax].flatten().nonzero()
@@ -572,7 +557,15 @@ class SIFT_Track(nn.Module):
         # mask_bs_next 给下一帧使用的mask
         return inst_local, inst_global, mask_bs_next, points_bs
 
-    def forward(self):
+    def forward(self, data):
+        # 提取需要的数据,并转移到cpu,并使用新的字典来存储
+        self.feed_dict = []
+        # self.npcs_feed_dict = []
+        for i, frame in enumerate(data):
+            if i == 0:
+                self.feed_dict.append(self.convert_init_frame_data(frame))
+            else:
+                self.feed_dict.append(self.convert_subseq_frame_data(frame))
         # 传入的data分为两部分, 第一帧和后续帧
         # 1.初始帧
         # 是否添加噪声 if else
@@ -624,8 +617,6 @@ class SIFT_Track(nn.Module):
             # len(points_assign_mat)是帧的数量-1
 
             # 计算两帧之间的gt位姿
-            pose_1_bs = last_frame['gt_part']
-            pose_2_bs = next_frame['gt_part']
             pose_1_tmp = last_frame['meta']['nocs2camera'][0]
             pose_2_tmp = next_frame['meta']['nocs2camera'][0]
 
@@ -638,18 +629,6 @@ class SIFT_Track(nn.Module):
             #   rotation (10, 3, 3)
             #   scale   (10)
             #   translation     (10, 3, 1)
-
-            pose_12_bs = {}
-            # s12 = s2/s1
-            pose_12_bs['scale'] = pose_2_bs['scale']/pose_1_bs['scale']
-            # R12 = R2*R1.T
-            pose_12_bs['rotation'] = torch.bmm(pose_2_bs['rotation'].squeeze(1),
-                                               pose_1_bs['rotation'].squeeze(1).transpose(-2, -1))
-            # t12 = t2 - s12*R12*t1
-            pose_12_bs['translation'] = pose_2_bs['translation'] - \
-                                        (pose_12_bs['scale'].reshape(-1, 1, 1) * \
-                                        torch.bmm(pose_12_bs['rotation'], pose_1_bs['translation'].squeeze(1))).unsqueeze(1)
-
             # tmp
             pose_12_tmp = {}
             # scale    (10)
@@ -662,18 +641,6 @@ class SIFT_Track(nn.Module):
                                         (pose_12_tmp['scale'].reshape(-1, 1, 1) * \
                                          torch.bmm(pose_12_tmp['rotation'],
                                                    pose_1_tmp['translation']))
-
-            sRt_2 = torch.eye(4)
-            sRt_2[:3, :3] = pose_2_bs['scale'][0] * pose_2_bs['rotation'].squeeze(1)[0]
-            sRt_2[:3, 3] = pose_2_bs['translation'].squeeze(1).squeeze(-1)[0]
-
-            sRt_1 = torch.eye(4)
-            sRt_1[:3, :3] = pose_1_bs['scale'][0] * pose_1_bs['rotation'].squeeze(1)[0]
-            sRt_1[:3, 3] = pose_1_bs['translation'].squeeze(1).squeeze(-1)[0]
-
-            sRt_12 = torch.eye(4)
-            sRt_12[:3, :3] = pose_12_bs['scale'][0] * pose_12_bs['rotation'][0]
-            sRt_12[:3, 3] = pose_12_bs['translation'].squeeze(1).squeeze(-1)[0]
 
             # tmp
             sRt_2_tmp = torch.eye(4)
@@ -699,12 +666,12 @@ class SIFT_Track(nn.Module):
                 model = np.ones((2048, 4))
                 model[:, :3] = gt_model_numpy
 
-                m1 = (sRt_1.numpy() @ model.transpose()).transpose()[:, :3]
-                m2 = (sRt_2.numpy() @ model.transpose()).transpose()[:, :3]
+                m1 = (sRt_1_tmp.numpy() @ model.transpose()).transpose()[:, :3]
+                m2 = (sRt_2_tmp.numpy() @ model.transpose()).transpose()[:, :3]
 
                 model_1 = np.ones((2048, 4))
                 model_1[:, :3] = m1
-                m1_12 = (sRt_12.numpy() @ model_1.transpose()).transpose()[:, :3]
+                m1_12 = (sRt_12_tmp.numpy() @ model_1.transpose()).transpose()[:, :3]
 
                 render_points_diff_color("model", [gt_model_numpy], [np.array([255, 0, 0])])
                 render_points_diff_color("p1 and p2", [m1, m2], [np.array([255, 0, 0]), np.array([0, 255, 0])])
@@ -732,39 +699,6 @@ class SIFT_Track(nn.Module):
             debug_info = None
 
         return points_assign_mat, pose_12_tmp, debug_info
-
-    def set_data(self, data):
-        print('set_data ...')
-        # 提取需要的数据,并转移到cpu,并使用新的字典来存储
-        self.feed_dict = []
-        # self.npcs_feed_dict = []
-        for i, frame in enumerate(data):
-            if i == 0:
-                self.feed_dict.append(self.convert_init_frame_data(frame))
-            else:
-                self.feed_dict.append(self.convert_subseq_frame_data(frame))
-            # self.npcs_feed_dict.append(self.convert_subseq_frame_npcs_data(frame))
-        print('set_data end')
-
-    def update(self, message):
-        print('forwarding ...')
-        points_assign_mat, pose12, m1m2 = self.forward()
-        print('forward end')
-        # 计算loss
-        if self.mode == 'train':
-            # 寻找coord的对应关系
-
-            print('computing loss')
-            loss = self.criterion(points_assign_mat, pose12, m1m2, message)
-            print('compute loss end')
-            print(f'loss: {loss}')
-            self.optimizer.zero_grad()
-            loss.backward()
-
-            # self.writer.add_scalar('grad/epoch{0}'.format(message['epoch']), loss.grad, message['step'])  # 记录梯度
-
-            self.optimizer.step()
-            print('backward end')
 
     def test(self, data):
         self.eval()
