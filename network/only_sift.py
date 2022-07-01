@@ -606,11 +606,11 @@ class SIFT_Track(nn.Module):
             # 参考SGPA计算对应矩阵A
             # 1 -> 2
             # pts1 = A1*pts2
-            assign_matrix_bs_1 = self.get_assgin_matrix(inst_local_1, inst_global_1, inst_global_2)
+            assign_matrix_bs_1 = self.get_assgin_matrix(inst_local_1, inst_global_1, inst_global_2)  # 参考SGPA loss.py line 40: assign_matrix_bs_1 应该与points_1相乘
             timer_extract_feat.tick('get_assgin_matrix 1 end')
             # 2 -> 1
             # pts2 = A2*pts1
-            assign_matrix_bs_2 = self.get_assgin_matrix(inst_local_2, inst_global_2, inst_global_1)
+            assign_matrix_bs_2 = self.get_assgin_matrix(inst_local_2, inst_global_2, inst_global_1) # assign_matrix_bs_1 应该与points_1相乘
             timer_extract_feat.tick('get_assgin_matrix 2 end')
 
             points_assign_mat.append((points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2))

@@ -277,8 +277,11 @@ parser.add_argument('--result_dir', type=str, default='results/Real', help='dire
 parser.add_argument('--max_epoch', type=int, default=25, help='max number of epochs to train')
 parser.add_argument('--log_path', type=str, default='../results/Real/', help='path to save tensorboard log file')
 parser.add_argument('--start_epoch', type=int, default=1, help='which epoch to start')
+parser.add_argument('--exp_name', type=str, default='CorrectAssignedPoints', help='name of this experiment')
 parser.add_argument('--resume_model', type=str, default='', help='load model')
-# parser.add_argument('--resume_model', type=str, default='../results/Real/model_cat1_23.pth', help='load model')
+
+
+# parser.add_argument('--resume_model', type=str, default='../results/Real/TwoFrameSame_100RegularLoss_model_cat1_05.pth', help='load model')
 
 # parser.add_argument('--dataset', type=str, default='CAMERA+Real', help='CAMERA or CAMERA+Real')
 # parser.add_argument('--data_dir', type=str, default='data', help='data directory')
@@ -304,7 +307,7 @@ def train(opt):
     result_path = '/data1/cxx/Lab_work/results'  # 保存数据集的预处理结果
     obj_category = '1'  # 类id, 当前模型仅针对该类进行训练
     mode = 'real_train'
-    num_expr = 'TwoFrameSame_100RegularLoss'  # 实验编号
+    num_expr = opt.exp_name  # 实验编号
     subseq_len = 2
 
 
@@ -340,7 +343,7 @@ def train(opt):
     # Loss
     corr_wt = 1.0
     cd_wt = 5.0
-    entropy_wt = 0.01  # 0.0001
+    entropy_wt = 0.0001  # 0.0001
     deform_wt = 0.01
     criterion = Loss(corr_wt, cd_wt, entropy_wt, deform_wt, writer)  # SPD 的loss
 

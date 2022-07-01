@@ -197,8 +197,9 @@ class Loss(nn.Module):
         points_2 = points_2.type(torch.float64)
         sRt12_gt = sRt12_gt.type(torch.float64)
         sRt21_gt = sRt21_gt.type(torch.float64)
-        points_1_in_2 = torch.bmm(soft_assign_1, points_2)  # (bs, n_pts, 3) points_1_in_2为points_1在points_2坐标系下的映射
-        points_2_in_1 = torch.bmm(soft_assign_2, points_1)
+        # soft_assign_1 应该与points_1相乘, soft_assign_2 应该与points_2相乘,
+        points_1_in_2 = torch.bmm(soft_assign_1, points_1)  # (bs, n_pts, 3) points_1_in_2为points_1在points_2坐标系下的映射
+        points_2_in_1 = torch.bmm(soft_assign_2, points_2)
         # gt
         points_1to2_gt = self.multi_pose_with_pts(sRt12_gt, points_1)
         points_2to1_gt = self.multi_pose_with_pts(sRt21_gt, points_2)
