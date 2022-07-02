@@ -614,6 +614,16 @@ Reply to above
 
 测试其他的loss
 
+> 发现之前搞错了，对应矩阵1应该乘以观测点云1来得到pts1在2下的映射
+
+可能是Regular loss导致收束到一个点，将RegularLoss缩小10倍(0.00001)
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-02-x09eSt.png' width="100%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-02-zlivlt.png' width="100%" >
+
+可以发现相比于之前，更加向瓶身靠拢了，但是绿色(网络输出结果)的依然是一条线
+
 # 拖尾噪声的影响不可忽视，如果分割网络还没有准备好，可以先按CAPTRA消融mask
 
 但实际做的时候不可能这样做，因为速度实在是太慢了
@@ -641,4 +651,8 @@ real_train/scene_4/0462
 
 互逆loss对结果有多少影响？如果要提升速度，删除这部分可能是下手点。
 
+用1to2_gt是否会有问题？因为对应点在2中可能并没有对应点，所以说
+
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-01-nwbEth.png' width="100%" >
 

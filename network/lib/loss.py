@@ -11,7 +11,7 @@ class Loss(nn.Module):
     """ Loss for training DeformNet.
         Use NOCS coords to supervise training.
     """
-    def __init__(self, corr_wt, cd_wt, entropy_wt, deform_wt, writer):
+    def __init__(self, corr_wt, cd_wt, entropy_wt, writer):
         super(Loss, self).__init__()
         self.writer = writer
         self.threshold = 0.1
@@ -19,7 +19,6 @@ class Loss(nn.Module):
         self.corr_wt = corr_wt
         self.cd_wt = cd_wt
         self.entropy_wt = entropy_wt
-        self.deform_wt = deform_wt
 
     # 问题来了, 之前求对应矩阵，是因为变形后的prior与gt点云nocs都是出于NOCS空间下，而且没有sRT的影响，因此两者理论上应该是重合的，
     # 而两帧的点云points_1和points_2是有点云影响的。
@@ -239,7 +238,7 @@ class Loss(nn.Module):
         # soft_assign_2 = soft_assign_2.type(torch.float64)
         # points_1 = points_1.type(torch.float64)
         # points_2 = points_2.type(torch.float64)
-        # points_1_in_2 = torch.bmm(soft_assign_1, points_2)
+        # points_1_in_2 = torch.bmm(soft_assign_1, points_1)
         # assigned_points = points_1_in_2[batch_idx].cpu().detach().numpy()
         # points_1 = points_1[batch_idx].cpu().detach().numpy()
         # points_2 = points_2[batch_idx].cpu().detach().numpy()
@@ -307,14 +306,7 @@ class Loss(nn.Module):
         #
         # # 如果让points1in2中的每个点都朝着gt对应点移动一段距离,loss会增大吗？
         #
-        # soft_assign_max = soft_assign_1.clone()[0]
-        # max_value, max_idx = torch.max(soft_assign_max, 1)
-        # # 将max的改成1，其他的改成0，然后看看点云
-        # max_assign = torch.zeros(soft_assign_max.shape).type(torch.float64)
-        # for i in range(len(max_idx)):
-        #     print('[{0}] : {1}'.format(max_idx[i].item(), max_value[i].item()))
-        #     max_assign[i, max_idx[i].item()] = 1.0
-        # p1in2_max = torch.mm(max_assign, torch.from_numpy(points_2))
+        #
         #
         # p1in2 = points_1_in_2[batch_idx]
         # p1to2_gt = points_1to2_gt[batch_idx]
@@ -326,10 +318,20 @@ class Loss(nn.Module):
         #                          [color_blue, color_green, color_red], save_img=False,
         #                          show_img=True)
         #
-        # render_points_diff_color('极端p1in2 与 p1to2_gt',
-        #                          [p1to2_gt.cpu().numpy(), p1in2_max.detach().cpu().numpy()],
-        #                          [color_blue, color_green], save_img=False,
-        #                          show_img=True)
+        # # # 极端
+        # # soft_assign_max = soft_assign_1.clone()[0]
+        # # max_value, max_idx = torch.max(soft_assign_max, 1)
+        # # # 将max的改成1，其他的改成0，然后看看点云
+        # # max_assign = torch.zeros(soft_assign_max.shape).type(torch.float64)
+        # # for i in range(len(max_idx)):
+        # #     print('[{0}] : {1}'.format(max_idx[i].item(), max_value[i].item()))
+        # #     max_assign[i, max_idx[i].item()] = 1.0
+        # # p1in2_max = torch.mm(max_assign, torch.from_numpy(points_2))
+        # # render_points_diff_color('极端p1in2 与 p1to2_gt',
+        # #                          [p1to2_gt.cpu().numpy(), p1in2_max.detach().cpu().numpy()],
+        # #                          [color_blue, color_green], save_img=False,
+        # #                          show_img=True)
+        #
         #
         # t0 = self.get_corr_loss(p1to2_gt.unsqueeze(0), p1in2.unsqueeze(0))
         # t1 = self.get_corr_loss(p1to2_gt.unsqueeze(0), moved_p1in2.unsqueeze(0))

@@ -276,10 +276,11 @@ parser.add_argument('--learning_rate', type=float, default=0.0001, help='initial
 parser.add_argument('--result_dir', type=str, default='results/Real', help='directory to save train results')
 parser.add_argument('--max_epoch', type=int, default=25, help='max number of epochs to train')
 parser.add_argument('--log_path', type=str, default='../results/Real/', help='path to save tensorboard log file')
-parser.add_argument('--start_epoch', type=int, default=1, help='which epoch to start')
-parser.add_argument('--exp_name', type=str, default='CorrectAssignedPoints', help='name of this experiment')
-parser.add_argument('--resume_model', type=str, default='', help='load model')
-
+parser.add_argument('--start_epoch', type=int, default=15, help='which epoch to start')
+parser.add_argument('--exp_name', type=str, default='CorrectAssignedPoints_LowRegularloss', help='name of this experiment')
+parser.add_argument('--resume_model', type=str, default='../results/Real/CorrectAssignedPoints_LowRegularloss_model_cat1_14.pth', help='load model')
+# parser.add_argument('--exp_name', type=str, default='CorrectAssignedPoints_LowRegularloss_UpCorr_DownCd', help='name of this experiment')
+# parser.add_argument('--resume_model', type=str, default='../results/Real/CorrectAssignedPoints_LowRegularloss_model_cat1_14.pth', help='load model')
 
 # parser.add_argument('--resume_model', type=str, default='../results/Real/TwoFrameSame_100RegularLoss_model_cat1_05.pth', help='load model')
 
@@ -341,11 +342,10 @@ def train(opt):
     # trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt, remove_border_w=-1, tb_writer=writer)
     trainer = SIFT_Track(real=('real' in mode), mode='train', opt=opt, remove_border_w=-1, tb_writer=writer)
     # Loss
-    corr_wt = 1.0
-    cd_wt = 5.0
-    entropy_wt = 0.0001  # 0.0001
-    deform_wt = 0.01
-    criterion = Loss(corr_wt, cd_wt, entropy_wt, deform_wt, writer)  # SPD 的loss
+    corr_wt = 1.0  # 1.0
+    cd_wt = 5.0  # 5.0
+    entropy_wt = 0.00001  # 0.0001
+    criterion = Loss(corr_wt, cd_wt, entropy_wt, writer)  # SPD 的loss
 
 
     trainer.cuda()
@@ -368,7 +368,6 @@ def train(opt):
             # test
             # if i < 100:
             #     continue
-            data[1] = data[0]
 
             message = {}
             message['exp_name'] = num_expr
