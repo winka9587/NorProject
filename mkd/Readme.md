@@ -654,5 +654,138 @@ real_train/scene_4/0462
 用1to2_gt是否会有问题？因为对应点在2中可能并没有对应点，所以说
 
 
-<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-01-nwbEth.png' width="100%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-01-nwbEth.png' width="70%" >
+
+
+## 实验记录
+### 实验1：用points_rgbFeature代替emb
+> corr_wt = 1.0  # 1.0 
+> 
+> cd_wt = 5.0  # 5.0 
+> 
+> entropy_wt = 0.00001  # 0.0001
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-03-SZS9SU.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-03-WAOXfj.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-03-eqqER3.png' width="50%" >
+
+15 epoch:
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-03-xQURNA.png' width="50%" >
+
+20 epoch:
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-03-JWqXe6.png' width="50%" >
+
+25 epoch:
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-03-cRjLni.png' width="50%" >
+
+
+
+如果将每个点都映射到当前权重最大的点：会有下面这些点剩下
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-03-Mx79ay.png' width="50%" >
+
+
+训练25 epoch，打印的每个点对应最大权重的点：
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-03-HwyQoe.png' width="50%" >
+
+###分析
+
+映射的权重都非常小， 大于0.5的很少，这是尖峰loss（也就是RegularLoss权重过小造成的）没能发挥作用
+
+有没有一种可能，是将inst_shape与观测放在一起是重合的？NO
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-03-iMFcCP.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-03-PZzQx4.png' width="50%" >
+
+### 实验2：添加decay
+
+添加后能够收敛到更低的值，但是依然没解决根本问题
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-04-hBjST4.png' width="50%" >
+
+
+### 实验3：增大RegularLoss
+
+> corr_wt = 1.0  # 1.0 
+> 
+> cd_wt = 5.0  # 5.0 
+> 
+> entropy_wt = 0.0001  # 0.0001
+>
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-05-NihdyD.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-05-f8hLPq.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-05-vK1yec.png' width="50%" >
+
+和SGPA相比并没有太大的差距，SGPA的点云是在中心吗？
+
+有没有这种可能，因为预测的是nocs坐标系中的映射，因此SGPA中的点云都归一化了。
+
+可视化SGPA点云+坐标轴
+
+
+### 对比：将SGPA的Transformer恢复的颜色移除后
+
+> (opt.decay_epoch = [0, 5, 10])
+>
+> (opt.decay_rate = [1.0, 0.6, 0.3])
+>
+> (opt.corr_wt = 1.0)
+>
+> (opt.cd_wt = 5.0)
+>
+> (opt.entropy_wt = 0.0001)
+>
+> (opt.deform_wt = 0.01)
+
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-04-OrJEyA.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-04-e63NGb.png' width="50%" >
+
+效果有所下降，但是依然能够映射个大概。所以Transformer(其实是颜色信息)并没有起决定性作用
+
+### 明天如果还不行，就在SGPA的基础上改
+
+
+### 还有一点似乎弄错了
+最早：对应矩阵A应该与谁相乘弄错了 No 这才是对的
+
+> points_1_in_2 = torch.bmm(soft_assign_1, points_2)  # (bs, n_pts, 3) points_1_in_2为points_1在points_2坐标系下的映射
+>
+> points_2_in_1 = torch.bmm(soft_assign_2, points_1)
+
+之前，对应矩阵A1应该与points1相乘没错，但是，其相乘得到应该是在1坐标系下的pts2 (WRONG)
+
+> points_1_in_2 = torch.bmm(soft_assign_1, points_1)  # (bs, n_pts, 3) points_1_in_2为points_1在points_2坐标系下的映射
+>
+> points_2_in_1 = torch.bmm(soft_assign_2, points_2)
+
+现在 (WRONG)
+
+> points_2_in_1 = torch.bmm(soft_assign_1, points_1)  # (bs, n_pts, 3) points_1_in_2为points_1在points_2坐标系下的映射
+>
+> points_1_in_2 = torch.bmm(soft_assign_2, points_2)
+
+出现这个问题的根本原因是assignmatirx没有想明白，assignmatrix的输入是：
+(观测局部,观测全局,目标全局) (n, feature_dim)
+最终得到 (n, m) 是为了让(m, 3)的nocs下点云映射到camera坐标系下观测点云
+
+### 测试正确的CorrectAssignPoints + decay
+
+还有一个问题：shuffle似乎没有起作用(已修改，下次测试)
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-06-GkUloZ.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-06-eYni73.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-06-ogtdpX.png' width="50%" >
 

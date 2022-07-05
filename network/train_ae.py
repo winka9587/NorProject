@@ -268,17 +268,17 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--batch_size', type=int, default=10, help='batch size')
 parser.add_argument('--num_workers', type=int, default=0, help='number of data loading workers')
 parser.add_argument('--gpu', type=str, default='0, 1, 2, 3', help='GPU to use')
+parser.add_argument('--lr', type=float, default=0.0001, help='initial learning rate')
 parser.add_argument('--lr_policy', type=str, default='step', help='')
 parser.add_argument('--lr_step_size', type=str, default='step', help='')
 parser.add_argument('--lr_gamma', type=str, default='step', help='')
 parser.add_argument('--optimizer', type=str, default='Adam', help='Adam or SGD')
-parser.add_argument('--learning_rate', type=float, default=0.0001, help='initial learning rate')
 parser.add_argument('--result_dir', type=str, default='results/Real', help='directory to save train results')
 parser.add_argument('--max_epoch', type=int, default=25, help='max number of epochs to train')
 parser.add_argument('--log_path', type=str, default='../results/Real/', help='path to save tensorboard log file')
-parser.add_argument('--start_epoch', type=int, default=15, help='which epoch to start')
-parser.add_argument('--exp_name', type=str, default='CorrectAssignedPoints_LowRegularloss', help='name of this experiment')
-parser.add_argument('--resume_model', type=str, default='../results/Real/CorrectAssignedPoints_LowRegularloss_model_cat1_14.pth', help='load model')
+parser.add_argument('--start_epoch', type=int, default=1, help='which epoch to start')
+parser.add_argument('--exp_name', type=str, default='CorrectAssignPoints', help='name of this experiment')
+parser.add_argument('--resume_model', type=str, default='', help='load model')
 # parser.add_argument('--exp_name', type=str, default='CorrectAssignedPoints_LowRegularloss_UpCorr_DownCd', help='name of this experiment')
 # parser.add_argument('--resume_model', type=str, default='../results/Real/CorrectAssignedPoints_LowRegularloss_model_cat1_14.pth', help='load model')
 
@@ -331,7 +331,7 @@ def train(opt):
 
     writer = SummaryWriter(opt.log_path)
 
-    shuffle = (mode == 'train')  # 是否打乱
+    shuffle = (mode == 'train' or mode == 'real_train')  # 是否打乱
     train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=shuffle, num_workers=opt.num_workers)
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=opt.num_workers)
 
@@ -344,7 +344,7 @@ def train(opt):
     # Loss
     corr_wt = 1.0  # 1.0
     cd_wt = 5.0  # 5.0
-    entropy_wt = 0.00001  # 0.0001
+    entropy_wt = 0.0001  # 0.0001
     criterion = Loss(corr_wt, cd_wt, entropy_wt, writer)  # SPD 的loss
 
 
@@ -353,7 +353,15 @@ def train(opt):
     # trainer = torch.nn.DataParallel(trainer, device_ids=device_ids)
 
     # Optimizer
-    optimizer = torch.optim.Adam(trainer.parameters(), lr=opt.learning_rate)
+    decay_epoch = [0, 5, 10]
+    decay_rate = [1.0, 0.6, 0.3]
+    n_decays = len(decay_epoch)
+    for i in range(n_decays):
+        if opt.start_epoch > decay_epoch[i]:
+            decay_count = i
+
+    # origin optimizer without decay
+    # optimizer = torch.optim.Adam(trainer.parameters(), lr=opt.lr)
 
 
     if opt.resume_model != '':
@@ -361,6 +369,7 @@ def train(opt):
         print(f'load resume model from {opt.resume_model}')
     for epoch in tqdm(range(opt.start_epoch, opt.max_epoch + 1), desc='Epoch:', position=0, leave=True):
         for i, data in enumerate(tqdm(train_dataloader, desc='training:', position=0, leave=True)):
+
             # 测试eval用
             # if i == 0:
             #     break
@@ -368,6 +377,12 @@ def train(opt):
             # test
             # if i < 100:
             #     continue
+
+            if decay_count < len(decay_rate):
+                if epoch > decay_epoch[decay_count]:
+                    current_lr = opt.lr * decay_rate[decay_count]
+                    optimizer = torch.optim.Adam(trainer.parameters(), lr=current_lr)
+                    decay_count += 1
 
             message = {}
             message['exp_name'] = num_expr
