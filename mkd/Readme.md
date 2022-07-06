@@ -783,10 +783,13 @@ real_train/scene_4/0462
 
 还有一个问题：shuffle似乎没有起作用(已修改，下次测试)
 
+收敛的loss依然和之前的实验相差不大, 效果也是。依然是一条线
+
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-06-GkUloZ.png' width="50%" >
 
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-06-eYni73.png' width="50%" >
 
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-06-ogtdpX.png' width="50%" >
 
-### 启动了shuffle, 对提取特征的点云进行均值化操作，但是计算loss时的点云还是直接用的观测点云
+### MeanPointsFeature
+启动了shuffle, 对提取特征的点云进行均值化操作，但是计算loss时的点云还是直接用的观测点云
