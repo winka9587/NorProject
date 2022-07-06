@@ -282,20 +282,20 @@ class SIFT_Track(nn.Module):
     # labels
     # meta
     # points_mean
-    def convert_subseq_frame_npcs_data(self, data):
-        input = {}
-        for key, item in data.items():
-            if key not in ['meta', 'labels', 'points', 'nocs']:
-                continue
-            elif key in ['meta']:
-                pass
-            elif key in ['labels']:
-                item = item.long().cuda()
-            else:
-                item = item.float().cuda()
-            input[key] = item
-        input['points_mean'] = data['meta']['points_mean'].float().cuda()
-        return input
+    # def convert_subseq_frame_npcs_data(self, data):
+    #     input = {}
+    #     for key, item in data.items():
+    #         if key not in ['meta', 'labels', 'points', 'nocs']:
+    #             continue
+    #         elif key in ['meta']:
+    #             pass
+    #         elif key in ['labels']:
+    #             item = item.long().cuda()
+    #         else:
+    #             item = item.float().cuda()
+    #         input[key] = item
+    #     input['points_mean'] = data['meta']['points_mean'].float().cuda()
+    #     return input
 
     # 估计对应矩阵
     # bs x n_pts x nv
@@ -347,6 +347,7 @@ class SIFT_Track(nn.Module):
         choose_bs = []
         points_feat_bs = torch.tensor([]).cuda()  # 提取的几何特征
         points_bs = torch.tensor([]).cuda()  # (bs, 1024, 3)
+        points_origin_bs = torch.tensor([]).cuda()
         timer_1 = Timer(True)
         for batch_idx in range(bs):
             color = color_bs[batch_idx]
@@ -453,14 +454,20 @@ class SIFT_Track(nn.Module):
             row_idx = choose // crop_w
             # 计算裁剪后的二维坐标到resize后的二维坐标，然后转一维坐标
             choose_resize = (torch.floor(row_idx * ratio) * self.img_size + torch.floor(col_idx * ratio)).type(torch.int64)
-            # choose (1024, 1)
-
-            choose_bs.append(choose_resize)  # 存放resize图像对应的choose
+            choose_bs.append(choose_resize)  # 存放resize图像对应的choose (1024, 1)
 
             # points_viz = points.copy()  # 测试反投影|(1)
             points = torch.from_numpy(np.transpose(points, (2, 0, 1))).cuda()  # points (1024, 3, 1) -> (1, 1024, 3)
             points = points.type(torch.float32)
-            points_bs = torch.cat((points_bs, points), 0)
+            points_origin_bs = torch.cat((points_bs, points), 0)  # 未均值化的点云
+            # 使用均值进行归一化
+            # points_mean (10, 3, 1)
+            # points (1, 1024, 3)
+            points_mean_single_batch = frame['meta']['points_mean'][batch_idx].cuda().unsqueeze(0)
+            points_mean_single_batch = points_mean_single_batch.permute(0, 2, 1).repeat(1, points.shape[1], 1)
+            points = points - points_mean_single_batch
+
+            points_bs = torch.cat((points_bs, points), 0)  # 均值化的点云
             timer_1.tick('single batch | backproject')
 
             # if self.mode == 'test':
@@ -496,6 +503,7 @@ class SIFT_Track(nn.Module):
             points_nrm = nrm[ymap_crop_masked, xmap_crop_masked]
             points_nrm = torch.from_numpy(points_nrm).squeeze(1).transpose(1, 0).cuda()  # points_nrm (1024, 1, 1, 3) -> (1, 1024, 3)
             timer_1.tick('single batch | extract color and nrm feature')
+
             # 如果要增加对噪声点的过滤，需要重新采样(重新计算choose)，或者在计算choose之前就进行过滤
             # viz_multi_points_diff_color(f'pts:{batch_idx}', [points], [np.array([[1, 0, 0]])])
             # 拼接三个不同的特征
@@ -554,10 +562,11 @@ class SIFT_Track(nn.Module):
         # 至此已经得到了(bs, 64, 1024)的几何特征与(bs, 64, 1024)的颜色特征
         # 将两者拼接得到instance local特征
         # 检查一下几何特征与颜色特征的值域
-        # inst_local = torch.cat((points_feat, emb), dim=1)   # bs x 128 x 1024
+        # 颜色特征使用卷积结果
+        inst_local = torch.cat((points_feat, emb), dim=1)   # bs x 128 x 1024
 
         # 卷积结果替换为pointnet的结果
-        inst_local = torch.cat((points_feat, points_rgb_feat), dim=1)   # bs x (64+64) x 1024 -> bs x 128 x 1024
+        # inst_local = torch.cat((points_feat, points_rgb_feat), dim=1)   # bs x (64+64) x 1024 -> bs x 128 x 1024
 
         inst_global = self.instance_global(inst_local)      # bs x 1024 x 1
         timer.tick('get RGB feature concat')
@@ -565,7 +574,7 @@ class SIFT_Track(nn.Module):
         #
         # kps_3d = None
         # mask_bs_next 给下一帧使用的mask
-        return inst_local, inst_global, mask_bs_next, points_bs
+        return inst_local, inst_global, mask_bs_next, points_bs, points_origin_bs
 
     def forward(self, data):
         # 提取需要的数据,并转移到cpu,并使用新的字典来存储
@@ -604,7 +613,7 @@ class SIFT_Track(nn.Module):
             # 提取第一帧的关键点
             print('extracting feature 1  ...')
             timer_extract_feat = Timer(True)
-            inst_local_1, inst_global_1, mask_bs_next, points_bs_1 = self.extract_3D_kp(last_frame, mask_last_frame)
+            inst_local_1, inst_global_1, mask_bs_next, points_bs_1, points_origin_bs_1 = self.extract_3D_kp(last_frame, mask_last_frame)
             timer_extract_feat.tick('extract feature 1 end')
 
             print('extracting feature 2  ...')
@@ -615,7 +624,7 @@ class SIFT_Track(nn.Module):
 
 
 
-            inst_local_2, inst_global_2, _, points_bs_2 = self.extract_3D_kp(next_frame, mask_bs_next)
+            inst_local_2, inst_global_2, _, points_bs_2, points_origin_bs_2 = self.extract_3D_kp(next_frame, mask_bs_next)
             timer_extract_feat.tick('extract feature 2 end')
 
             # 参考SGPA计算对应矩阵A
@@ -628,7 +637,7 @@ class SIFT_Track(nn.Module):
             assign_matrix_bs_2 = self.get_assgin_matrix(inst_local_2, inst_global_2, inst_global_1) # assign_matrix_bs_1 应该与points_1相乘
             timer_extract_feat.tick('get_assgin_matrix 2 end')
 
-            points_assign_mat.append((points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2))
+            points_assign_mat.append((points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, points_origin_bs_1, points_origin_bs_2))
             # len(points_assign_mat)是帧的数量-1
 
             # 计算两帧之间的gt位姿

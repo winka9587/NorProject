@@ -169,13 +169,11 @@ class Loss(nn.Module):
         return sRt_bs_inv
 
 
-    def get_total_loss_2_frame(self, points_1,  points_2, assign_mat_1, assign_mat_2, pose12_gt, m1m2):
+    def get_total_loss_2_frame(self, points_1,  points_2, assign_mat_1, assign_mat_2, pose12_gt, m1m2, points_origin_bs_1, points_origin_bs_2):
         # def forward(self, assign_mat, deltas, prior, nocs, model):
         """
         Args:
-            assign_mat: bs x n_pts x nv
-            deltas: bs x nv x 3
-            prior: bs x nv x 3
+            points_origin_bs_1, points_origin_bs_2  # 未均值化的点云
         """
 
         # should same with "debug" in only_sift.py
@@ -359,9 +357,9 @@ class Loss(nn.Module):
     def forward(self, points_assign_mat_list, pose12_gt, m1m2, message):
         total_loss = 0.0
         for frame_pair in points_assign_mat_list:
-            points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2 = frame_pair
+            points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, points_origin_bs_1, points_origin_bs_2 = frame_pair
             frame_total_loss, cd_loss1, cd_loss2, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v = \
-                self.get_total_loss_2_frame(points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, pose12_gt, m1m2)
+                self.get_total_loss_2_frame(points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, pose12_gt, m1m2, points_origin_bs_1, points_origin_bs_2)
             print("cd_loss_1:      {7},\n"
                   "        2       {8}\n"
                   "corr_loss_1:    {0},\n"

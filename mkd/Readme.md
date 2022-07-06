@@ -789,3 +789,4 @@ real_train/scene_4/0462
 
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-06-ogtdpX.png' width="50%" >
 
+### 启动了shuffle, 对提取特征的点云进行均值化操作，但是计算loss时的点云还是直接用的观测点云
