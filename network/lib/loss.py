@@ -227,7 +227,7 @@ class Loss(nn.Module):
 
         total_loss = cd_loss1 + cd_loss2 + corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss + entropy_loss_1v + entropy_loss_2v
 
-        viz_debug = False
+        viz_debug = True
         if viz_debug:
             # 测试及可视化代码
             # if debug:

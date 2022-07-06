@@ -785,6 +785,8 @@ real_train/scene_4/0462
 
 收敛的loss依然和之前的实验相差不大, 效果也是。依然是一条线
 
+![img_9.png](img_9.png)
+
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-06-GkUloZ.png' width="50%" >
 
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-06-eYni73.png' width="50%" >

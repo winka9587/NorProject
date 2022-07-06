@@ -463,8 +463,9 @@ class SIFT_Track(nn.Module):
             # 使用均值进行归一化
             # points_mean (10, 3, 1)
             # points (1, 1024, 3)
-            points_mean_single_batch = frame['meta']['points_mean'][batch_idx].cuda().unsqueeze(0)
-            points_mean_single_batch = points_mean_single_batch.permute(0, 2, 1).repeat(1, points.shape[1], 1)
+            points_mean_single_batch = torch.mean(points, axis=1, keepdims=True).cuda().repeat(1, points.shape[1], 1)
+            # 这个points_mean是整个batch的points的mean
+            # points_mean_single_batch = frame['meta']['points_mean'][batch_idx].cuda().unsqueeze(0)
             points = points - points_mean_single_batch
 
             points_bs = torch.cat((points_bs, points), 0)  # 均值化的点云
