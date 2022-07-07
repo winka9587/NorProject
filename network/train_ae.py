@@ -276,13 +276,14 @@ parser.add_argument('--optimizer', type=str, default='Adam', help='Adam or SGD')
 parser.add_argument('--result_dir', type=str, default='results/Real', help='directory to save train results')
 parser.add_argument('--max_epoch', type=int, default=25, help='max number of epochs to train')
 parser.add_argument('--log_path', type=str, default='../results/Real/', help='path to save tensorboard log file')
-parser.add_argument('--start_epoch', type=int, default=1, help='which epoch to start')
+parser.add_argument('--start_epoch', type=int, default=24, help='which epoch to start')
+parser.add_argument('--log_close', type=bool, default='False', help='name of this experiment')
 parser.add_argument('--exp_name', type=str, default='MeanPointsFeature', help='name of this experiment')
-parser.add_argument('--resume_model', type=str, default='', help='load model')
+parser.add_argument('--resume_model', type=str, default='../results/Real/MeanPointsFeature_model_cat1_23.pth', help='load model')
 # 测试用
 # parser.add_argument('--log_close', type=bool, default='True', help='name of this experiment')
 # parser.add_argument('--exp_name', type=str, default='just test', help='name of this experiment')
-# parser.add_argument('--resume_model', type=str, default='../results/Real/CorrectAssignPoints_model_cat1_25.pth', help='load model')
+# parser.add_argument('--resume_model', type=str, default='../results/Real/MeanPointsFeature_model_cat1_23.pth', help='load model')
 
 # parser.add_argument('--resume_model', type=str, default='../results/Real/TwoFrameSame_100RegularLoss_model_cat1_05.pth', help='load model')
 

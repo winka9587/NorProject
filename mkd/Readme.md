@@ -550,7 +550,9 @@ t和R的公式推错了，看打草纸
 
 在CAPTRA的测试代码中，obj模型通过sRT可以与pts重合，只是差个scale
 
-而在NorPorjec中，obj模型通过sRT之后与pts差的特别远。为什么会这样？直接让两个代码读同一张图片。下面是得到的结论：
+### obj模型经过sRt12后相差特别远
+
+而在NorPorject中，obj模型通过sRT之后与pts差的特别远。为什么会这样？直接让两个代码读同一张图片。下面是得到的结论：
   1.位姿sRt是一样的，至少大致是一样的，可能有一些误差，但不至于大方向都不对了
   2.目前想到的可能的原因是观测点云pts的问题。看一下CAPTRA代码中pts是如何得到的。
 
@@ -558,10 +560,9 @@ t和R的公式推错了，看打草纸
 
 在backproject中对得到点云的z周进行了取反操作。可是取反之后也不行。
 
+如果都不行, 最终方法，将两个观测点云存到npy，然后读取显示
 
-最终方法，将两个观测点云存到npy，然后读取显示
-
-结论: 反投影时候SGPA和CAPTRA的像素坐标系uv的原点位置不同，SGPA在左上角，CAPTRA在左下角，
+解决: 反投影时候SGPA和CAPTRA的像素坐标系uv的原点位置不同，SGPA在左上角，CAPTRA在左下角，
 而nocs2camera位姿针对的是CAPTRA的uv坐标                      
 
 next
@@ -795,3 +796,33 @@ real_train/scene_4/0462
 
 ### MeanPointsFeature
 启动了shuffle, 对提取特征的点云进行均值化操作，但是计算loss时的点云还是直接用的观测点云
+
+依然是映射后变成一条线的问题
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-07-WxmAh0.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-07-wafNqO.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-07-WWQd8N.png' width="50%" >
+
+似乎是因为points1to2_gt不对，例如上图中，蓝色的点云应该与绿色红色重合才对，绿色红色应该在蓝色的中心。
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-07-HzRj78.png' width="50%" >
+
+俯视：
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-07-6XSZVr.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-07-SPQ509.png' width="50%" >
+
+
+深蓝色是第一帧观测点云, 灰色是第二帧观测点云, 两者几乎重合。
+
+蓝色是第一帧点云经过R12变换到第二帧的位置，但可以看到明显错了。
+
+似乎只是个例？应该是某一帧的位姿错误, 大部分还是正常的。 之后可以写个脚本来批量判断
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-07-I86G2C.png' width="50%" >
+
+也就是说目前的问题是尖峰分布没能发挥作用，训练完之后用这个模型继续训练，
+将尖峰分布的loss增大

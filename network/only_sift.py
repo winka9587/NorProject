@@ -459,7 +459,7 @@ class SIFT_Track(nn.Module):
             # points_viz = points.copy()  # 测试反投影|(1)
             points = torch.from_numpy(np.transpose(points, (2, 0, 1))).cuda()  # points (1024, 3, 1) -> (1, 1024, 3)
             points = points.type(torch.float32)
-            points_origin_bs = torch.cat((points_bs, points), 0)  # 未均值化的点云
+            points_origin_bs = torch.cat((points_origin_bs, points), 0)  # 未均值化的点云
             # 使用均值进行归一化
             # points_mean (10, 3, 1)
             # points (1, 1024, 3)
