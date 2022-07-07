@@ -744,8 +744,6 @@ real_train/scene_4/0462
 > (opt.cd_wt = 5.0)
 >
 > (opt.entropy_wt = 0.0001)
->
-> (opt.deform_wt = 0.01)
 
 
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-04-OrJEyA.png' width="50%" >
@@ -792,6 +790,8 @@ real_train/scene_4/0462
 
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-06-eYni73.png' width="50%" >
 
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-07-9yzZSC.png' width="50%" >
+
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-06-ogtdpX.png' width="50%" >
 
 ### MeanPointsFeature
@@ -826,3 +826,15 @@ real_train/scene_4/0462
 
 也就是说目前的问题是尖峰分布没能发挥作用，训练完之后用这个模型继续训练，
 将尖峰分布的loss增大
+
+# PreTrain_UpRegularLoss
+
+> (opt.decay_epoch = [0, 5, 10])
+>
+> (opt.decay_rate = [1.0, 0.6, 0.3])
+>
+> (opt.corr_wt = 1.0)
+>
+> (opt.cd_wt = 5.0)
+>
+> (opt.entropy_wt = 0.0005)  0.0001 -> 0.0005
