@@ -6,6 +6,15 @@ from .nn_distance.chamfer_loss import ChamferLoss
 from network.lib.utils import render_points_diff_color, render_lines
 from captra_utils.utils_from_captra import project
 
+# 测试用，可以查看对应矩阵(n, m)中， 对应点最大值的分布
+def get_assign_mat_distrib(assign_mat):
+    tmp = torch.max(assign_mat, 1)
+    count_10 = np.zeros(10)
+    for i in tmp[0]:
+        count_10[int(i.item() * 10)] += 1
+        print(i.item())
+    for i in range(10):
+        print("{} ~ {}: {}".format(i, i + 1, count_10[i]))
 # SPD 的 loss
 class Loss(nn.Module):
     """ Loss for training DeformNet.

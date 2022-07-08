@@ -838,3 +838,47 @@ real_train/scene_4/0462
 > (opt.cd_wt = 5.0)
 >
 > (opt.entropy_wt = 0.0005)  0.0001 -> 0.0005
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-08-tGQOnD.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-08-F4CxMQ.png' width="50%" >
+
+
+有没有一种可能，是因为SGPA中提取prior几何特征时，使用的是完整的prior所以可以找到成功的匹配？
+
+SGPA结果:
+
+绿色为prior+D, 蓝色为assign_mat x (prior+D)
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-08-jum0jO.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-08-Bfl3Ym.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-08-aFe1hH.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-08-8x5jUB.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-08-aBJmzC.png' width="50%" >
+
+对应矩阵各个占的比例
+
+<div class="img_group" style="text-align:center;">
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-08-QT7ihh.png' width="50%" >
+<p  style="margin-top: 0">my</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-08-PmwOOv.png' width="50%" >
+<p style="margin-top: 0">SGPA</p>
+</div>
+</div>
+my:
+
+
+SPGA:
+
+
+
+观测SGPA的assingment矩阵得出结论：
+
+RegularLoss并不能完全一一对应,最高也就0.5~0.6。而大部分其实是在0.3左右
