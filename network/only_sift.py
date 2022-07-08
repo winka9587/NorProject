@@ -3,7 +3,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from part_dof_utils import part_model_batch_to_part, eval_part_full, add_noise_to_part_dof, \
     compute_parts_delta_pose
-from utils import cvt_torch2, Timer, add_border_bool_by_crop_pos, get_bbox
+from utils import cvt_torch, Timer, add_border_bool_by_crop_pos, get_bbox
 from network.lib.utils import crop_img
 import numpy as np
 from extract_2D_kp import extract_sift_kp_from_RGB, sift_match
@@ -156,7 +156,7 @@ def choose_from_mask_bs(mask_bs, n_pts):
 
 
 class SIFT_Track(nn.Module):
-    def __init__(self, real, subseq_len=2, mode='train', opt=None, img_size=192, remove_border_w=5, tb_writer=None):
+    def __init__(self, device, real, subseq_len=2, mode='train', opt=None, img_size=192, remove_border_w=5, tb_writer=None):
         self.writer = tb_writer  # tensorboard writer
         super(SIFT_Track, self).__init__()
         # self.fc1 = nn.Linear(emb_dim, 512)
@@ -165,7 +165,7 @@ class SIFT_Track(nn.Module):
         self.remove_border_w = remove_border_w
         self.mode = mode
         self.subseq_len = subseq_len
-        # self.device = device
+        self.device = device
         self.num_parts = 1
         self.num_joints = 0
         # self.matcher = cv2.BFMatcher(cv2.NORM_L2)
@@ -245,11 +245,9 @@ class SIFT_Track(nn.Module):
             if key in ['meta']:
                 pass
             elif key in ['labels']:
-                item = item.long().cuda()
-                # item = item.long().to(self.device)
+                item = item.long().to(self.device)
             else:
-                item = item.float().cuda()
-                # item = item.float().to(self.device)
+                item = item.float().to(self.device)
             feed_frame[key] = item
         return feed_frame
 
@@ -268,12 +266,12 @@ class SIFT_Track(nn.Module):
         # 添加nocs点云
         if 'nocs' in data:
             input['nocs'] = data['nocs']
-        input = cvt_torch2(input)
+        input = cvt_torch(input, self.device)
         # 添加meta
         input['meta'] = data['meta']
         # 添加labels
         if 'labels' in data:
-            input['labels'] = data['labels'].long().cuda()
+            input['labels'] = data['labels'].long().to(self.device)
         return input
 
     # 最终的input包含:
@@ -282,7 +280,7 @@ class SIFT_Track(nn.Module):
     # labels
     # meta
     # points_mean
-    # def convert_subseq_frame_npcs_data(self, data):
+    # def convert_subseq_frame_nocs_data(self, data):
     #     input = {}
     #     for key, item in data.items():
     #         if key not in ['meta', 'labels', 'points', 'nocs']:
@@ -290,11 +288,11 @@ class SIFT_Track(nn.Module):
     #         elif key in ['meta']:
     #             pass
     #         elif key in ['labels']:
-    #             item = item.long().cuda()
+    #             item = item.long().to(self.device)
     #         else:
-    #             item = item.float().cuda()
+    #             item = item.float().to(self.device)
     #         input[key] = item
-    #     input['points_mean'] = data['meta']['points_mean'].float().cuda()
+    #     input['points_mean'] = data['meta']['points_mean'].float().to(self.device)
     #     return input
 
     # 估计对应矩阵

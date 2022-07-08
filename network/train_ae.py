@@ -313,8 +313,6 @@ def train(opt):
     mode = 'real_train'
     num_expr = opt.exp_name  # 实验编号
     subseq_len = 2
-
-
     device = torch.device("cuda:0")
     train_dataset = RealSeqDataset(dataset_path=dataset_path,
                           result_path=result_path,
@@ -344,7 +342,7 @@ def train(opt):
 
 
     # trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt, remove_border_w=-1, tb_writer=writer)
-    trainer = SIFT_Track(real=('real' in mode), mode='train', opt=opt, remove_border_w=-1, tb_writer=writer)
+    trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt, remove_border_w=-1, tb_writer=writer)
     # Loss
     corr_wt = 1.0  # 1.0
     cd_wt = 5.0  # 5.0
