@@ -8,10 +8,14 @@ from captra_utils.utils_from_captra import project
 
 # 测试用，可以查看对应矩阵(n, m)中， 对应点最大值的分布
 def get_assign_mat_distrib(assign_mat):
+    """
+    assign_mat (n, m) 对应矩阵, 每一行是points_2中一个点到points_1中点的对应权重,
+    从中提取权重最大的点， 输出其权重, 并计数各个区间的点数量
+    """
     tmp = torch.max(assign_mat, 1)
     count_10 = np.zeros(10)
     for i in tmp[0]:
-        count_10[int(i.item() * 10)] += 1
+        count_10[int(i.item())] += 1
         print(i.item())
     for i in range(10):
         print("{} ~ {}: {}".format(i, i + 1, count_10[i]))
@@ -239,7 +243,7 @@ class Loss(nn.Module):
 
         total_loss = cd_loss1 + cd_loss2 + corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss + entropy_loss_1v + entropy_loss_2v
 
-        viz_debug = False
+        viz_debug = True
         if viz_debug:
             # 测试及可视化代码
             # if debug:
@@ -325,6 +329,9 @@ class Loss(nn.Module):
                 # d_len = torch.norm(d, p=2, dim=1, keepdim=True)
                 # d = d/d_len  # 方向向量
                 moved_p1in2 = p1in2 + 0.1*d  # 每个点向gt移动百分比
+
+                get_assign_mat_distrib(soft_assign_1[batch_idx])
+
                 render_points_diff_color('before and after move assignmatrix', [points_2_, p1to2_gt.cpu().numpy(), p1in2.detach().cpu().numpy(), moved_p1in2.cpu().detach().numpy()],
                                          [color_gray, color_blue, color_green, color_red], save_img=False,
                                          show_img=True)

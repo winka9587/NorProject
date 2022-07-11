@@ -882,3 +882,106 @@ SPGA:
 观测SGPA的assingment矩阵得出结论：
 
 RegularLoss并不能完全一一对应,最高也就0.5~0.6。而大部分其实是在0.3左右
+
+想到了一个不工作的原因，SGPA中的权重对应的是单个的loss，
+SGPA中只有一个CD_Loss,corrLoss,RegularLoss，其权重分别为1.0, 5.0, 0.0001
+
+但是在我的Norproject中,
+其实是有CD_Loss1, ..2,corrLoss1, ..2,RegularLoss共5个loss
+所以CD和corr的权重至少需要除以二
+
+### OneDirection(RegularLoss*0.1)
+
+将CDLoss, CorrLoss, RegularLoss都减少为1个, 即取消双向, 只保留单向
+RegularLoss为原来的0.1倍
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-11-MqHjIK.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-11-ZNpnop.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-11-HgIyQ3.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-09-M8Hm1s.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-09-eNwIRn.png' width="50%" >
+
+
+
+### BioDirectionHalfWeight
+依然是双向loss, 但是CDLoss, CorrLoss, RegularLoss的权重都除以二
+
+> (opt.decay_epoch = [0, 5, 10])
+>
+> (opt.decay_rate = [1.0, 0.6, 0.3])
+>
+> (opt.corr_wt = 0.5)  # 1.0
+>
+> (opt.cd_wt = 2.5)  # 5.0
+>
+> (opt.entropy_wt = 0.00005)  # 0.0001
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-09-UqbMhA.png' width="50%" >
+
+但似乎并没有什么用, 想一下也对, 相当于所有的Loss都除以同一个值, 也就是说所有的Loss占据的比重都还是一样的。
+没有变化。（是我想错了，我以为RegularLoss只有一个，其实RegularLoss也是有两个的）
+
+而且看图表. RegularLoss依然没能降低
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-09-kUOJS3.png' width="50%" >
+
+### Only_CDLoss1_model_cat1_25
+只用一个CDLoss1, 确实有一点点散开，说明之前的RegularLoss不仅没发挥作用，而且还让权重分散了？
+
+不,看一下权重分布区间的输出就能发现,之前的RegularLoss其实发挥了一些作用，至少向2~3, 3~4区间移动了,
+
+但同样也出现了一些9~10区间的，不一定对错的权重
+
+1:
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-10-nWI5lg.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-10-LtYLWl.png' width="50%" >
+
+2:
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-10-Gbu4Jm.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-10-CQtOKE.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-10-nNhuy3.png' width="50%" >
+
+3:
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-10-rU56wS.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-10-TQ449U.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-10-mz5EIp.png' width="50%" >
+
+### Only_CDLoss1_CorrLoss1_model_cat1_25.pth
+单向, CD+Corr loss，没有尖峰loss的情况
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-11-9hFfwX.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-11-Tw6Gi4.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-11-8XehC7.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-11-4v65AK.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-11-ZXWiRx.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-11-HB8X7e.png' width="50%" >
+
+没有尖峰loss点的权重都分布在0~1，并且可视化也是一条线。
+所以能够说明，之前的对应矩阵映射成一条线的情况，实际是尖峰loss没能起作用导致的。
+
+因此下一步的目标有几个方向:
+
+1.增大尖峰loss权重。(之前都是某一个或某两个loss做主导)
+
+2.是否因为观测点云代替prior+D导致
+
+3.是否因为观测点云仅仅均值化不够
+
+### 增大RegularLoss权重(1000倍): 

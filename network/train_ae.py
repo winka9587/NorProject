@@ -283,7 +283,7 @@ parser.add_argument('--start_epoch', type=int, default=11, help='which epoch to 
 # 测试用
 parser.add_argument('--log_close', type=bool, default='True', help='name of this experiment')
 parser.add_argument('--exp_name', type=str, default='just test', help='name of this experiment')
-parser.add_argument('--resume_model', type=str, default='../results/Real/PreTrain_UpRegularLoss_model_cat1_23.pth', help='load model')
+parser.add_argument('--resume_model', type=str, default='../results/Real/OneDirection_UpRegular100_model_cat1_25.pth', help='load model')
 
 # parser.add_argument('--resume_model', type=str, default='../results/Real/TwoFrameSame_100RegularLoss_model_cat1_05.pth', help='load model')
 
