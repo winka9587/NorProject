@@ -626,6 +626,19 @@ class SIFT_Track(nn.Module):
             inst_local_2, inst_global_2, _, points_bs_2, points_origin_bs_2 = self.extract_3D_kp(next_frame, mask_bs_next)
             timer_extract_feat.tick('extract feature 2 end')
 
+            # 可视化均值化后的点
+            color_red = np.array([255, 0, 0])
+            color_green = np.array([0, 255, 0])
+            color_blue = np.array([0, 0, 255])
+            color_blue2 = np.array([0, 0, 100])
+            color_gray = np.array([93, 93, 93])
+            color_black = np.array([255, 255, 255])
+            render_points_diff_color('viz mean points',
+                                     [points_bs_1[0].cpu().numpy(), points_origin_bs_1[0].cpu().numpy()],
+                                     [color_green, color_red], save_img=False,
+                                     show_img=True)
+
+
             # 参考SGPA计算对应矩阵A
             # 1 -> 2
             # pts1 = A1*pts2

@@ -1042,7 +1042,7 @@ def pose_fit(source, target, num_hyps=1024, inlier_th=1e-3):  # src, tgt: [N, 3]
 # color np.array([0, 0, 0])
 def render_points_diff_color(name, pts_list, color_list, save_img = True, show_img=True, result_dir=None):
     vis = o3d.visualization.Visualizer()
-    vis.create_window(window_name=name, width=512, height=512, left=100, top=100)
+    vis.create_window(window_name=name, width=512, height=512, left=300, top=300)
     opt = vis.get_render_option()
     opt.show_coordinate_frame = True
     assert len(pts_list) == len(color_list)

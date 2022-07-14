@@ -15,7 +15,7 @@ def get_assign_mat_distrib(assign_mat):
     tmp = torch.max(assign_mat, 1)
     count_10 = np.zeros(10)
     for i in tmp[0]:
-        count_10[int(i.item())] += 1
+        count_10[int(i.item()*10)] += 1
         print(i.item())
     for i in range(10):
         print("{} ~ {}: {}".format(i, i + 1, count_10[i]))
@@ -243,7 +243,7 @@ class Loss(nn.Module):
 
         total_loss = cd_loss1 + cd_loss2 + corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss + entropy_loss_1v + entropy_loss_2v
 
-        viz_debug = True
+        viz_debug = False
         if viz_debug:
             # 测试及可视化代码
             # if debug:
@@ -336,7 +336,7 @@ class Loss(nn.Module):
                                          [color_gray, color_blue, color_green, color_red], save_img=False,
                                          show_img=True)
 
-                # # 极端
+                # 极端
                 # soft_assign_max = soft_assign_1.clone()[0]
                 # max_value, max_idx = torch.max(soft_assign_max, 1)
                 # # 将max的改成1，其他的改成0，然后看看点云

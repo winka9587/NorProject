@@ -971,7 +971,7 @@ RegularLoss为原来的0.1倍
 
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-11-ZXWiRx.png' width="50%" >
 
-<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-11-HB8X7e.png' width="50%" >
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-13-9Ds6Kb.png' width="50%" >
 
 没有尖峰loss点的权重都分布在0~1，并且可视化也是一条线。
 所以能够说明，之前的对应矩阵映射成一条线的情况，实际是尖峰loss没能起作用导致的。
@@ -984,4 +984,40 @@ RegularLoss为原来的0.1倍
 
 3.是否因为观测点云仅仅均值化不够
 
-### 增大RegularLoss权重(1000倍): 
+### 增大RegularLoss权重(7倍): BioDirectionHalfWeight_Regular7_model_cat1_25
+
+可以看到RegularLoss在正常下降，但是效果依然不够。
+
+而且RegularLoss的权重稍微一增大，就会出现许多权重出现9~10范围内的点
+
+对比SGPA的尖峰Loss:
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-wVqQii.png' width="50%" >
+
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-2UzDFL.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-fyb8JH.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-oEgzIB.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-ui1Z8u.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-fjGqLi.png' width="50%" >
+
+
+### 增大RegularLoss权重(20倍): BioDirectionHalfWeight_Regular20_model_cat1_25
+
+单纯增大尖峰Loss的权重对于映射点的散开似乎并没有作用，只是单纯地让一些点映射到错误的点上
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-QK3tV4.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-0uGZHe.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-q0GnXK.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-9zgF0P.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-MZvKZe.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-o9H4dg.png' width="50%" >
