@@ -35,6 +35,30 @@ test
 
 > + open3d可视化代码如何对应到每一个点，例如有深度图和normal map，想将normal map的颜色在点云中可视化出来
 
+### 可视化时的坐标系使用自己绘制的
+
+图中细的黑线是自己用(0,0,0),(0,0,1),(0,1,0),(1,0,0)绘制的xyz坐标
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-15-e34nVQ.png' width="50%" >
+
+
+使用下面的代码(右, )来创建坐标系
+
+> coordinateMesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
+> 
+> scale = 1.0
+> 
+> coordinateMesh.scale(scale, center=(0, 0, 0))
+> 
+> vis.add_geometry(coordinateMesh)
+
+而不是（左）, opt的坐标不一定在坐标原点
+
+> opt = vis.get_render_option()
+> 
+> opt.show_coordinate_frame = True
+
+
 4. SGPA中CNN是192x192的
 
 > + 缩小CNN输入的图像尺寸，能否减少CNN的耗时？
@@ -1021,3 +1045,14 @@ RegularLoss为原来的0.1倍
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-MZvKZe.png' width="50%" >
 
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-12-o9H4dg.png' width="50%" >
+
+## 可能的原因
+
+均值化并不够，在SGPA中的piror, 点云xyz的坐标已经归一化到(-0.5, 0.5)，
+而使用的观测点云并没有这个条件。
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-15-cRxskM.png' width="50%" >
+
+### 测试: 用nocs来计算loss
+
+用_coord.png反投影得到的点云nocs来计算loss

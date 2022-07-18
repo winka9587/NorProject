@@ -182,7 +182,7 @@ class Loss(nn.Module):
         return sRt_bs_inv
 
 
-    def get_total_loss_2_frame(self, points_1,  points_2, assign_mat_1, assign_mat_2, pose12_gt, m1m2, points_origin_bs_1, points_origin_bs_2):
+    def get_total_loss_2_frame(self, points_1,  points_2, assign_mat_1, assign_mat_2, pose12_gt, m1m2, points_origin_bs_1, points_origin_bs_2, nocsBS_1, nocsBS_2):
         # def forward(self, assign_mat, deltas, prior, nocs, model):
         """
         Args:
@@ -222,7 +222,6 @@ class Loss(nn.Module):
         cd_loss1, _, _ = self.chamferloss(points_1to2_gt.type(torch.float32).contiguous(), points_1_in_2.type(torch.float32))
         cd_loss2, _, _ = self.chamferloss(points_2to1_gt.type(torch.float32).contiguous(), points_2_in_1.type(torch.float32))
         # 1. Correspondence Loss
-
         corr_loss_1 = self.get_corr_loss(points_1_in_2, points_1to2_gt)
         corr_loss_2 = self.get_corr_loss(points_2_in_1, points_2to1_gt)
 
@@ -234,7 +233,7 @@ class Loss(nn.Module):
         entropy_loss_1v = self.get_RegularizationLoss_v(assign_mat_1, soft_assign_1)
         entropy_loss_2v = self.get_RegularizationLoss_v(assign_mat_2, soft_assign_2)
 
-        # 3. A1和A2应当互逆
+        # 3. A1和A2应当互逆(并非纯粹的0,1矩阵，是否互逆值得怀疑)
         reciprocal_loss = self.get_cos_sim_loss(assign_mat_1, assign_mat_2)
 
         entropy_loss_1v = 0
@@ -371,9 +370,9 @@ class Loss(nn.Module):
     def forward(self, points_assign_mat_list, pose12_gt, m1m2, message):
         total_loss = 0.0
         for frame_pair in points_assign_mat_list:
-            points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, points_origin_bs_1, points_origin_bs_2 = frame_pair
+            points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, points_origin_bs_1, points_origin_bs_2, nocsBS_1, nocsBS_2 = frame_pair
             frame_total_loss, cd_loss1, cd_loss2, corr_loss_1, corr_loss_2, entropy_loss_1, entropy_loss_2, reciprocal_loss, entropy_loss_1v, entropy_loss_2v = \
-                self.get_total_loss_2_frame(points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, pose12_gt, m1m2, points_origin_bs_1, points_origin_bs_2)
+                self.get_total_loss_2_frame(points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, pose12_gt, m1m2, points_origin_bs_1, points_origin_bs_2, nocsBS_1, nocsBS_2)
             print("cd_loss_1:      {7},\n"
                   "        2       {8}\n"
                   "corr_loss_1:    {0},\n"

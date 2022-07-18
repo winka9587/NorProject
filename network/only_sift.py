@@ -14,16 +14,15 @@ from normalspeedTest import norm2bgr
 import network.FFB6D_models.pytorch_utils as pt_utils
 # from network.FFB6D_models.RandLA.RandLANet import Network as RandLANet
 from captra_utils.utils_from_captra import backproject
-from network.lib.utils import sample_points_from_mesh, render_points_diff_color
+from network.lib.utils import sample_points_from_mesh
 
 from lib.pspnet import PSPNet
 from lib.pointnet import Pointnet2MSG
 
 from torch.optim import lr_scheduler
 import torchvision.transforms as transforms
-from lib.utils import render_points_diff_color
+from visualize import RenderPcd, RenderPcdNoHeader
 
-from visualize import viz_multi_points_diff_color, viz_mask_bool
 import normalSpeed
 
 norm_color = transforms.Compose(
@@ -334,6 +333,7 @@ class SIFT_Track(nn.Module):
         # 输入color,normal,depth,mask,反投影，得到9通道的点云
         color_bs = frame['meta']['pre_fetched']['color']
         depth_bs = frame['meta']['pre_fetched']['depth']
+        coord_bs = frame['meta']['pre_fetched']['coord']
 
         timer.tick('extract idx from mask')
 
@@ -345,12 +345,16 @@ class SIFT_Track(nn.Module):
         choose_bs = []
         points_feat_bs = torch.tensor([]).cuda()  # 提取的几何特征
         points_bs = torch.tensor([]).cuda()  # (bs, 1024, 3)
+        nocsBS = torch.tensor([]).cuda()  # (bs, 1024, 3)
+
         points_origin_bs = torch.tensor([]).cuda()
         timer_1 = Timer(True)
         for batch_idx in range(bs):
             color = color_bs[batch_idx]
             depth = depth_bs[batch_idx]
             mask = mask_bs[batch_idx]
+            coord = coord_bs[batch_idx][:, :, :3]  # SGPA的方法而不是CAPTRA的方法计算nocs
+            coord = coord[:, :, (2, 1, 0)]
 
             if self.remove_border_w > 0:
                 mask = self.remove_border_bool(mask, kernel_size=self.remove_border_w)
@@ -417,6 +421,13 @@ class SIFT_Track(nn.Module):
             # width_crop = depth[rmin:rmax, cmin:cmax].shape[1]
             # height_crop = depth[rmin:rmax, cmin:cmax].shape[0]
 
+            coord = coord.cpu().numpy()
+            coord = np.array(coord, dtype=np.float32) / 255
+            coord[:, :, 2] = 1 - coord[:, :, 2]
+            nocs = coord[rmin:rmax, cmin:cmax, :].reshape((-1, 3))[choose, :] - 0.5
+            nocs = torch.from_numpy(np.transpose(nocs, (1, 0, 2))).cuda()  # points (1024, 3, 1) -> (1, 1024, 3)
+            nocs = nocs.type(torch.float32)
+            nocsBS = torch.cat((nocsBS, nocs), 0)
 
             depth_masked = depth[rmin:rmax, cmin:cmax].flatten()[choose][:, np.newaxis]       # 对点云进行一个采样,采样n_pts个点
             # 用来提取裁剪前图像上的点，主要用于反投影(因为choose是在裁剪前的mask的2D bbox上得到的)
@@ -488,7 +499,7 @@ class SIFT_Track(nn.Module):
             #     color_green = np.array([0, 255, 0])
             #     color_blue = np.array([0, 0, 255])
             #     pts_colors = [color_red]
-            #     render_points_diff_color('test backproject', [points_viz],
+            #     RenderPcd('test backproject', [points_viz],
             #                              pts_colors, save_img=False,
             #                              show_img=True)
 
@@ -573,7 +584,7 @@ class SIFT_Track(nn.Module):
         #
         # kps_3d = None
         # mask_bs_next 给下一帧使用的mask
-        return inst_local, inst_global, mask_bs_next, points_bs, points_origin_bs
+        return inst_local, inst_global, mask_bs_next, points_bs, points_origin_bs, nocsBS
 
     def forward(self, data):
         # 提取需要的数据,并转移到cpu,并使用新的字典来存储
@@ -612,7 +623,7 @@ class SIFT_Track(nn.Module):
             # 提取第一帧的关键点
             print('extracting feature 1  ...')
             timer_extract_feat = Timer(True)
-            inst_local_1, inst_global_1, mask_bs_next, points_bs_1, points_origin_bs_1 = self.extract_3D_kp(last_frame, mask_last_frame)
+            inst_local_1, inst_global_1, mask_bs_next, points_bs_1, points_origin_bs_1, nocsBS_1 = self.extract_3D_kp(last_frame, mask_last_frame)
             timer_extract_feat.tick('extract feature 1 end')
 
             print('extracting feature 2  ...')
@@ -621,9 +632,7 @@ class SIFT_Track(nn.Module):
             # 测试用，使用第二帧的gt_mask，如果要测试前一阵的的padding mask，删除这一行
             mask_bs_next = self.feed_dict[i]['meta']['pre_fetched']['mask']
 
-
-
-            inst_local_2, inst_global_2, _, points_bs_2, points_origin_bs_2 = self.extract_3D_kp(next_frame, mask_bs_next)
+            inst_local_2, inst_global_2, _, points_bs_2, points_origin_bs_2, nocsBS_2 = self.extract_3D_kp(next_frame, mask_bs_next)
             timer_extract_feat.tick('extract feature 2 end')
 
             # 可视化均值化后的点
@@ -633,10 +642,20 @@ class SIFT_Track(nn.Module):
             color_blue2 = np.array([0, 0, 100])
             color_gray = np.array([93, 93, 93])
             color_black = np.array([255, 255, 255])
-            render_points_diff_color('viz mean points',
-                                     [points_bs_1[0].cpu().numpy(), points_origin_bs_1[0].cpu().numpy()],
-                                     [color_green, color_red], save_img=False,
-                                     show_img=True)
+
+            nocs1 = data[0]['nocs'][0].numpy().transpose()
+            nocs2 = data[1]['nocs'][0].numpy().transpose()
+            nocs3 = data[1]['nocs'][9].numpy().transpose()
+
+            print('Path: {0} \n{1}'.format(data[0]['meta']['ori_path'][0], data[1]['meta']['ori_path'][0]))
+            RenderPcd('nocs 0-1',
+                                     [points_bs_1[0].cpu().numpy(), points_bs_2[0].cpu().numpy(), nocs1, nocs2],
+                                     [color_green, color_red, color_blue, color_red])
+
+            print('Path: {0} \n{1}'.format(data[0]['meta']['ori_path'][0], data[1]['meta']['ori_path'][9]))
+            RenderPcd('nocs 0-9',
+                      [points_bs_1[0].cpu().numpy(), points_bs_2[9].cpu().numpy(), nocs1, nocs3],
+                      [color_green, color_red, color_blue, color_red])
 
 
             # 参考SGPA计算对应矩阵A
@@ -649,7 +668,10 @@ class SIFT_Track(nn.Module):
             assign_matrix_bs_2 = self.get_assgin_matrix(inst_local_2, inst_global_2, inst_global_1) # assign_matrix_bs_1 应该与points_1相乘
             timer_extract_feat.tick('get_assgin_matrix 2 end')
 
-            points_assign_mat.append((points_bs_1, points_bs_2, assign_matrix_bs_1, assign_matrix_bs_2, points_origin_bs_1, points_origin_bs_2))
+            points_assign_mat.append((points_bs_1, points_bs_2,
+                                      assign_matrix_bs_1, assign_matrix_bs_2,
+                                      points_origin_bs_1, points_origin_bs_2,
+                                      nocsBS_1, nocsBS_2))
             # len(points_assign_mat)是帧的数量-1
 
             # 计算两帧之间的gt位姿
@@ -709,8 +731,8 @@ class SIFT_Track(nn.Module):
                 model_1[:, :3] = m1
                 m1_12 = (sRt_12_tmp.numpy() @ model_1.transpose()).transpose()[:, :3]
 
-                render_points_diff_color("model", [gt_model_numpy], [np.array([255, 0, 0])])
-                render_points_diff_color("p1 and p2", [m1, m2], [np.array([255, 0, 0]), np.array([0, 255, 0])])
+                RenderPcd("model", [gt_model_numpy], [np.array([255, 0, 0])])
+                RenderPcd("p1 and p2", [m1, m2], [np.array([255, 0, 0]), np.array([0, 255, 0])])
 
                 # tmp
                 coord = last_frame['nocs'][0].transpose(-1, -2).cpu().numpy()
@@ -723,7 +745,7 @@ class SIFT_Track(nn.Module):
                 coord_1 = coord_1[:, :3]
                 coord_2 = (sRt_2_tmp.numpy() @ coord_.transpose()).transpose()[:, :3]
 
-                render_points_diff_color("coord 1, 2, 12", [coord_1, coord_2, coord_12], [np.array([255, 0, 0]), np.array([0, 255, 0]), np.array([0, 0, 255])])
+                RenderPcd("coord 1, 2, 12", [coord_1, coord_2, coord_12], [np.array([255, 0, 0]), np.array([0, 255, 0]), np.array([0, 0, 255])])
 
         # 检查模型投影到图像上
         print(last_frame['meta']['path'])

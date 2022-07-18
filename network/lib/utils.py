@@ -1040,11 +1040,11 @@ def pose_fit(source, target, num_hyps=1024, inlier_th=1e-3):  # src, tgt: [N, 3]
 
 
 # color np.array([0, 0, 0])
-def render_points_diff_color(name, pts_list, color_list, save_img = True, show_img=True, result_dir=None):
+def render_points_diff_color(name, pts_list, color_list, save_img = True, show_img=True, result_dir=None, show_coordinate=True):
     vis = o3d.visualization.Visualizer()
     vis.create_window(window_name=name, width=512, height=512, left=300, top=300)
-    opt = vis.get_render_option()
-    opt.show_coordinate_frame = True
+    # opt = vis.get_render_option()
+    # opt.show_coordinate_frame = True
     assert len(pts_list) == len(color_list)
     pcds = []
     for index in range(len(pts_list)):
@@ -1058,8 +1058,32 @@ def render_points_diff_color(name, pts_list, color_list, save_img = True, show_i
         pcd.colors = o3d.utility.Vector3dVector(colors)
         pcds.append(pcd)
         vis.add_geometry(pcd)
-    ctr = vis.get_view_control()
 
+    if show_coordinate:
+        # coordinateMesh = o3d.geometry.TriangleMesh.create_coordinate_frame()
+        # scale = 1.0
+        # coordinateMesh.scale(scale, center=(0, 0, 0))
+        # vis.add_geometry(coordinateMesh)
+
+        # 手动绘制坐标系, 看看open3d的坐标系是否与实际一致
+        coordLen = 1.25
+        xyz = np.array([
+            [0, 0, 0], [coordLen, 0, 0], [0, coordLen, 0], [0, 0, coordLen]
+        ])
+        lines = [
+            [0, 1],
+            [0, 2],
+            [0, 3]
+        ]
+        colors = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+        line_set = o3d.geometry.LineSet(
+            points=o3d.utility.Vector3dVector(xyz),
+            lines=o3d.utility.Vector2iVector(lines),
+        )
+        line_set.colors = o3d.utility.Vector3dVector(colors)
+        vis.add_geometry(line_set)
+
+    ctr = vis.get_view_control()
     ctr.rotate(-300.0, 150.0)
     if name == 'camera':
         ctr.translate(20.0, -20.0)  # (horizontal right +, vertical down +)
@@ -1069,7 +1093,6 @@ def render_points_diff_color(name, pts_list, color_list, save_img = True, show_i
     if save_img and result_dir:
         vis.capture_screen_image(os.path.join(result_dir, name + '.png'), False)
     vis.destroy_window()
-
 
 # 需要提供的点与线格式如下
 # points = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1],
