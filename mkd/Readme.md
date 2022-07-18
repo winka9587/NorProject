@@ -1056,3 +1056,4 @@ RegularLoss为原来的0.1倍
 ### 测试: 用nocs来计算loss
 
 用_coord.png反投影得到的点云nocs来计算loss
+

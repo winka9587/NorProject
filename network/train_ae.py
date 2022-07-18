@@ -338,7 +338,7 @@ def train(opt):
     if opt.log_close:
         writer.close()
     shuffle = (mode == 'train' or mode == 'real_train')  # 是否打乱
-    shuffle = False
+    # shuffle = False
     train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=shuffle, num_workers=opt.num_workers)
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=opt.num_workers)
 

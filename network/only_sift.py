@@ -635,27 +635,29 @@ class SIFT_Track(nn.Module):
             inst_local_2, inst_global_2, _, points_bs_2, points_origin_bs_2, nocsBS_2 = self.extract_3D_kp(next_frame, mask_bs_next)
             timer_extract_feat.tick('extract feature 2 end')
 
-            # 可视化均值化后的点
-            color_red = np.array([255, 0, 0])
-            color_green = np.array([0, 255, 0])
-            color_blue = np.array([0, 0, 255])
-            color_blue2 = np.array([0, 0, 100])
-            color_gray = np.array([93, 93, 93])
-            color_black = np.array([255, 255, 255])
+            viz = False
+            if viz:
+                # 可视化均值化后的点
+                color_red = np.array([255, 0, 0])
+                color_green = np.array([0, 255, 0])
+                color_blue = np.array([0, 0, 255])
+                color_blue2 = np.array([0, 0, 100])
+                color_gray = np.array([93, 93, 93])
+                color_black = np.array([255, 255, 255])
 
-            nocs1 = data[0]['nocs'][0].numpy().transpose()
-            nocs2 = data[1]['nocs'][0].numpy().transpose()
-            nocs3 = data[1]['nocs'][9].numpy().transpose()
+                nocs1 = data[0]['nocs'][0].numpy().transpose()
+                nocs2 = data[1]['nocs'][0].numpy().transpose()
+                nocs3 = data[1]['nocs'][9].numpy().transpose()
 
-            print('Path: {0} \n{1}'.format(data[0]['meta']['ori_path'][0], data[1]['meta']['ori_path'][0]))
-            RenderPcd('nocs 0-1',
-                                     [points_bs_1[0].cpu().numpy(), points_bs_2[0].cpu().numpy(), nocs1, nocs2],
-                                     [color_green, color_red, color_blue, color_red])
+                print('Path: {0} \n{1}'.format(data[0]['meta']['ori_path'][0], data[1]['meta']['ori_path'][0]))
+                RenderPcd('nocs 0-1',
+                                         [points_bs_1[0].cpu().numpy(), points_bs_2[0].cpu().numpy(), nocs1, nocs2],
+                                         [color_green, color_red, color_blue, color_red])
 
-            print('Path: {0} \n{1}'.format(data[0]['meta']['ori_path'][0], data[1]['meta']['ori_path'][9]))
-            RenderPcd('nocs 0-9',
-                      [points_bs_1[0].cpu().numpy(), points_bs_2[9].cpu().numpy(), nocs1, nocs3],
-                      [color_green, color_red, color_blue, color_red])
+                print('Path: {0} \n{1}'.format(data[0]['meta']['ori_path'][0], data[1]['meta']['ori_path'][9]))
+                RenderPcd('nocs 0-9',
+                          [points_bs_1[0].cpu().numpy(), points_bs_2[9].cpu().numpy(), nocs1, nocs3],
+                          [color_green, color_red, color_blue, color_red])
 
 
             # 参考SGPA计算对应矩阵A
