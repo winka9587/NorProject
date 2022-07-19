@@ -283,7 +283,7 @@ parser.add_argument('--start_epoch', type=int, default=11, help='which epoch to 
 # 测试用
 parser.add_argument('--log_close', type=bool, default='True', help='name of this experiment')
 parser.add_argument('--exp_name', type=str, default='just test', help='name of this experiment')
-parser.add_argument('--resume_model', type=str, default='../results/Real/Only_CDLoss1_CorrLoss1_model_cat1_25.pth', help='load model')
+parser.add_argument('--resume_model', type=str, default='../results/Real/nocsLoss_model_cat1_25.pth', help='load model')
 
 # parser.add_argument('--log_close', type=bool, default='True', help='name of this experiment')
 # parser.add_argument('--exp_name', type=str, default='just test', help='name of this experiment')
@@ -351,7 +351,7 @@ def train(opt):
     # Loss
     corr_wt = 1.0  # 1.0
     cd_wt = 5.0  # 5.0
-    entropy_wt = 0.0005  # 0.0001
+    entropy_wt = 0.00005  # 0.0001
     criterion = Loss(corr_wt, cd_wt, entropy_wt, writer)  # SPD 的loss
 
 
