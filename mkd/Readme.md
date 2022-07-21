@@ -1056,3 +1056,24 @@ RegularLoss为原来的0.1倍
 ### 测试: 用nocs来计算loss
 
 用_coord.png反投影得到的点云nocs来计算loss
+
+> corr_wt = 1.0  # 1.0
+> 
+> cd_wt = 5.0  # 5.0 
+>
+> entropy_wt = 0.0005  # 0.0001
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-19-B9Cyjd.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-19-DnM3op.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-19-CMXswA.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-19-8ptTsx.png' width="50%" >
+
+没有散开的问题依然存在，但至少已不再是一条线
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-19-f9HsKn.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-19-JvnyxY.png' width="50%" >
+
