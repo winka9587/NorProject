@@ -225,8 +225,8 @@ class Loss(nn.Module):
         # corr_loss_1 = self.get_corr_loss(points_1_in_2, points_1to2_gt)
         # corr_loss_2 = self.get_corr_loss(points_2_in_1, points_2to1_gt)
         # 用nocs代替
-        points_1_in_2_nocs = torch.bmm(soft_assign_1, nocsBS_2)  # (bs, n_pts, 3) points_1_in_2为points_1在points_2坐标系下的映射
-        points_2_in_1_nocs = torch.bmm(soft_assign_2, nocsBS_1)
+        points_1_in_2_nocs = torch.bmm(soft_assign_1, nocsBS_2.type(torch.float64))  # (bs, n_pts, 3) points_1_in_2为points_1在points_2坐标系下的映射
+        points_2_in_1_nocs = torch.bmm(soft_assign_2, nocsBS_1.type(torch.float64))
         corr_loss_1 = self.get_corr_loss(points_1_in_2_nocs, nocsBS_1)
         corr_loss_2 = self.get_corr_loss(points_2_in_1_nocs, nocsBS_2)
 
