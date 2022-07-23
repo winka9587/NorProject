@@ -1061,7 +1061,7 @@ RegularLoss为原来的0.1倍
 > 
 > cd_wt = 5.0  # 5.0 
 >
-> entropy_wt = 0.0005  # 0.0001
+> entropy_wt = 0.0005  # 0.0001 十倍权重
 
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-19-B9Cyjd.png' width="50%" >
 
@@ -1076,4 +1076,115 @@ RegularLoss为原来的0.1倍
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-19-f9HsKn.png' width="50%" >
 
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-19-JvnyxY.png' width="50%" >
+
+### entropyLoss出现上升趋势一个原因是权重过大
+
+实验名最后的数值代表entropy_wt乘以n倍(0.0005*n)
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-20-MurzLK.png' width="50%" >
+
+### nocs计算Loss
+
+7倍权重，比较十倍权重的实验可以发现权重降低之后其他两个loss更小
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-20-vu12lv.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-20-VYpvzN.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-20-sZfAIy.png' width="50%" >
+
+...
+
+前面两个是从11轮开始训练的，不排除学习率降低的影响，待会再重新训练吧...
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-21-PE8nrt.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-21-k2h7mP.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-21-fgMDSD.png' width="50%" >
+
+### 
+
+我的和SGPA可能存在问题的地方:
+1. 我使用的是A*观测点云(对观测点云进行归一化处理?)
+2. 观测点云有噪声(CAMERA来测试)
+
+分别打印我的观测点云和SGPA观测点云
+
+我的:
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-22-vUyqSX.png' width="50%" >
+
+
+
+可以发现中心点并不在max和min的中心, 因此, 如果pointnet下采样时候使用的是噪声点，就会导致没有用。
+
+因此我测试了一下SGPA用纯Real数据集进行训练, 看看结果如何。
+
+EntropyLoss依然可以收敛
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-22-Yz3lvY.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-22-7ytMax.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-22-nF72sY.png' width="50%" >
+
+看一下观测点云以及映射结果
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-22-Sx2OUH.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-22-TX2SKn.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-22-BNOYvf.png' width="50%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-22-MYYamE.png' width="50%" >
+
+说明只使用观测点云也是可以的，为什么SGPA的点云没有拖尾？
+
+Mask是maskRCNN检测得到的...
+我能否先使用maskRCNN的mask来测试？不行, maskRCNN的检测结果只有val和real_test有
+
+基本可以确定原因是因为在于观测点云和prior+D, 整个网络中使用观测点云的地方一共有两处:
+1. 提取特征, 因为SGPA使用的也是没有处理过的观测点云, 所以没有问题。
+
+2. CD Loss 是为了让prior+D和inst更接近, 所以说其权重是针对Regular后的点云设计的
+
+3. Corr loss 为了A*(prior+D) 后的点云和 观测点云 更接近(这里其实算是SPD框架的弊端)
+
+4. EntropyLoss 为了让A能够尖峰分布, 一个点映射到另一个点云上的点应该尽可能的少, 1~3个点关联
+
+关键在于, SPD在计算loss时, 都是A*归一化的点云 然后计算loss。所以我打算用归一化的点云来
+代替观测点云。也让A*nocs来计算loss
+
+所以接下来的思路:
+1. CD loss也要用nocs的点云来做, (讲道理,如果CD和SPD论文中描述的功能一样,
+那么它在理论上是不需要的)
+
+### 测试结果
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

@@ -217,16 +217,22 @@ class Loss(nn.Module):
         points_1to2_gt = self.multi_pose_with_pts(sRt12_gt, points_1)
         points_2to1_gt = self.multi_pose_with_pts(sRt21_gt, points_2)
 
-
+        # 用nocs代替
+        # points_1_in_2_nocs (bs, n_pts, 3)
+        # points_1_in_2为points_1在points_2坐标系下的映射
+        points_1_in_2_nocs = torch.bmm(soft_assign_1, nocsBS_2.type(torch.float64))
+        points_2_in_1_nocs = torch.bmm(soft_assign_2, nocsBS_1.type(torch.float64))
         # 0. CD loss 能否约束形状？
-        cd_loss1, _, _ = self.chamferloss(points_1to2_gt.type(torch.float32).contiguous(), points_1_in_2.type(torch.float32))
-        cd_loss2, _, _ = self.chamferloss(points_2to1_gt.type(torch.float32).contiguous(), points_2_in_1.type(torch.float32))
+        # cd_loss1, _, _ = self.chamferloss(points_1to2_gt.type(torch.float32).contiguous(), points_1_in_2.type(torch.float32))
+        # cd_loss2, _, _ = self.chamferloss(points_2to1_gt.type(torch.float32).contiguous(), points_2_in_1.type(torch.float32))
+        # 用nocs代替
+        cd_loss1, _, _ = self.chamferloss(points_1_in_2_nocs, nocsBS_1)
+        cd_loss2, _, _ = self.chamferloss(points_2_in_1_nocs, nocsBS_2)
+
         # 1. Correspondence Loss
         # corr_loss_1 = self.get_corr_loss(points_1_in_2, points_1to2_gt)
         # corr_loss_2 = self.get_corr_loss(points_2_in_1, points_2to1_gt)
         # 用nocs代替
-        points_1_in_2_nocs = torch.bmm(soft_assign_1, nocsBS_2.type(torch.float64))  # (bs, n_pts, 3) points_1_in_2为points_1在points_2坐标系下的映射
-        points_2_in_1_nocs = torch.bmm(soft_assign_2, nocsBS_1.type(torch.float64))
         corr_loss_1 = self.get_corr_loss(points_1_in_2_nocs, nocsBS_1)
         corr_loss_2 = self.get_corr_loss(points_2_in_1_nocs, nocsBS_2)
 
@@ -398,7 +404,7 @@ class Loss(nn.Module):
             self.writer.add_scalars('Corr_loss/{0}'.format(exp_name),
                                     {"corr_1": corr_loss_1, "corr_2": corr_loss_2}, (epoch-1)*312+step)
             self.writer.add_scalars('Entropy_loss/{0}'.format(exp_name),
-                                    {"entropy_loss_1": entropy_loss_1, "entropy_loss_2": entropy_loss_2}, (epoch-1)*312+(epoch-1)*312+step)
+                                    {"entropy_loss_1": entropy_loss_1, "entropy_loss_2": entropy_loss_2}, (epoch-1)*312+step)
             self.writer.add_scalar('reciprocal_loss/{0}'.format(exp_name), reciprocal_loss, (epoch-1)*312+step)
 
         return total_loss
