@@ -3,18 +3,15 @@ import math
 import numpy as np
 import os
 import sys
-sys.path.append(os.path.dirname(__file__))
-# # 指定显卡
-# device_ids = "2,3"
-# os.environ['CUDA_VISIBLE_DEVICES'] = device_ids
 import torch
 from torch.utils.data import Dataset, DataLoader
 
 from os.path import join as pjoin
 import cv2
-from utils import ensure_dir
-from captra_utils.utils_from_captra import load_depth
-import _pickle as cPickle
+
+sys.path.append(os.path.dirname(__file__))  # .../NorProject/network/
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))  # .../NorProject/
+
 from dataset_process import split_nocs_dataset, read_cloud, base_generate_data, shuffle, subtract_mean, add_corners
 from utils import add_border_bool, Timer
 

@@ -2,8 +2,8 @@
 import os
 import cv2
 import numpy as np
-device_ids = "3"
-os.environ['CUDA_VISIBLE_DEVICES'] = device_ids
+# device_ids = "3"
+# os.environ['CUDA_VISIBLE_DEVICES'] = device_ids
 from data.dataset import RealSeqDataset
 from torch.utils.data import DataLoader
 import argparse
@@ -276,14 +276,21 @@ parser.add_argument('--optimizer', type=str, default='Adam', help='Adam or SGD')
 parser.add_argument('--result_dir', type=str, default='results/Real', help='directory to save train results')
 parser.add_argument('--max_epoch', type=int, default=25, help='max number of epochs to train')
 parser.add_argument('--log_path', type=str, default='../results/Real/', help='path to save tensorboard log file')
-parser.add_argument('--start_epoch', type=int, default=1, help='which epoch to start')
-parser.add_argument('--log_close', type=bool, default='False', help='name of this experiment')
-parser.add_argument('--exp_name', type=str, default='NOCSForLoss', help='name of this experiment')
+parser.add_argument('--start_epoch', type=int, default=1, help='which epoch to start(start count from 1)')
+parser.add_argument('--log_close', type=bool, default='False', help='use log or not')
+parser.add_argument('--exp_name', type=str, default='nocsLoss_norm', help='name of this experiment')
 parser.add_argument('--resume_model', type=str, default='', help='load model')
+parser.add_argument('--CDLossTimes', type=float, default=1.0, help='')
+parser.add_argument('--CorrLossTimes', type=float, default=1.0, help='')
+parser.add_argument('--EntropyLossTimes', type=float, default=1.0, help='')
+
+parser.add_argument('--device_ids', type=str, default="3", help='choose device to run code')
+
+
 # 测试用
 # parser.add_argument('--log_close', type=bool, default='True', help='name of this experiment')
 # parser.add_argument('--exp_name', type=str, default='just test', help='name of this experiment')
-# parser.add_argument('--resume_model', type=str, default='../results/Real/nocsLoss_norm-1.0-1.0-7.0-_model_cat1_25.pth', help='load model')
+# parser.add_argument('--resume_model', type=str, default='../results/Real/Only_CDLoss1_CorrLoss1_model_cat1_25.pth', help='load model')
 
 # parser.add_argument('--log_close', type=bool, default='True', help='name of this experiment')
 # parser.add_argument('--exp_name', type=str, default='just test', help='name of this experiment')
@@ -310,12 +317,27 @@ parser.add_argument('--resume_model', type=str, default='', help='load model')
 
 def train(opt):
     # test_coord_correspondence2()
+    # log
+    writer = SummaryWriter(opt.log_path)
+    if opt.log_close:
+        writer.close()
+    # Loss
+    corr_wt = 0.5 * opt.CorrLossTimes   # 1.0
+    cd_wt = 2.5 * opt.CDLossTimes  # 5.0
+    entropy_wt = 0.00005 * opt.EntropyLossTimes  # 0.0001
+    criterion = Loss(corr_wt, cd_wt, entropy_wt, writer)  # SPD 的loss
 
-    dataset_path = '/data1/cxx/Lab_work/dataset' # 数据集路径,格式like:CAPTRA
+    dataset_path = '/data1/cxx/Lab_work/dataset'  # 数据集路径,格式like:CAPTRA
     result_path = '/data1/cxx/Lab_work/results'  # 保存数据集的预处理结果
     obj_category = '1'  # 类id, 当前模型仅针对该类进行训练
     mode = 'real_train'
-    num_expr = opt.exp_name  # 实验编号
+    num_expr = '{}-{}-{}-{}-'.format(opt.exp_name, opt.CDLossTimes, opt.CorrLossTimes, opt.EntropyLossTimes)  # 实验编号
+
+    # status output
+    print(f'\n Exp start: {num_expr}\n')
+    print(f'\n device id: {opt.device_ids}\n')
+    print(f'\n Loss: \n corr: {corr_wt}\n CD: {cd_wt}\n Regular: {entropy_wt}\n')
+
     subseq_len = 2
     device = torch.device("cuda:0")
     train_dataset = RealSeqDataset(dataset_path=dataset_path,
@@ -334,11 +356,7 @@ def train(opt):
                                    device=device)
     print(f'Successfully Load NOCSDataSet {num_expr}_{mode}_{obj_category}')
 
-    writer = SummaryWriter(opt.log_path)
-    if opt.log_close:
-        writer.close()
     shuffle = (mode == 'train' or mode == 'real_train')  # 是否打乱
-    # shuffle = False
     train_dataloader = DataLoader(train_dataset, batch_size=opt.batch_size, shuffle=shuffle, num_workers=opt.num_workers)
     test_dataloader = DataLoader(test_dataset, batch_size=1, shuffle=False, num_workers=opt.num_workers)
 
@@ -348,11 +366,7 @@ def train(opt):
 
     # trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt, remove_border_w=-1, tb_writer=writer)
     trainer = SIFT_Track(device=device, real=('real' in mode), mode='train', opt=opt, remove_border_w=-1, tb_writer=writer)
-    # Loss
-    corr_wt = 1.0  # 1.0
-    cd_wt = 5.0  # 5.0
-    entropy_wt = 0.00005  # 0.0001
-    criterion = Loss(corr_wt, cd_wt, entropy_wt, writer)  # SPD 的loss
+
 
 
     trainer.cuda()
@@ -497,6 +511,7 @@ def train(opt):
 
 if __name__ == "__main__":
     opt = parser.parse_args()
+    os.environ['CUDA_VISIBLE_DEVICES'] = opt.device_ids
     train(opt)
 
 

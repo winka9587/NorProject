@@ -1,19 +1,9 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from part_dof_utils import part_model_batch_to_part, eval_part_full, add_noise_to_part_dof, \
-    compute_parts_delta_pose
 from utils import cvt_torch, Timer, add_border_bool_by_crop_pos, get_bbox
-from network.lib.utils import crop_img
 import numpy as np
-from extract_2D_kp import extract_sift_kp_from_RGB, sift_match
 import cv2
-from normalspeedTest import norm2bgr
-# network.FFB6D_models.
-# from network.FFB6D_models.cnn.pspnet import PSPNet
 import network.FFB6D_models.pytorch_utils as pt_utils
-# from network.FFB6D_models.RandLA.RandLANet import Network as RandLANet
-from captra_utils.utils_from_captra import backproject
 from network.lib.utils import sample_points_from_mesh
 
 from lib.pspnet import PSPNet
@@ -21,7 +11,7 @@ from lib.pointnet import Pointnet2MSG
 
 from torch.optim import lr_scheduler
 import torchvision.transforms as transforms
-from visualize import RenderPcd, RenderPcdNoHeader
+from visualize import RenderPcd
 
 import normalSpeed
 
