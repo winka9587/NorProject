@@ -226,14 +226,14 @@ class Loss(nn.Module):
         # cd_loss1, _, _ = self.chamferloss(points_1to2_gt.type(torch.float32).contiguous(), points_1_in_2.type(torch.float32))
         # cd_loss2, _, _ = self.chamferloss(points_2to1_gt.type(torch.float32).contiguous(), points_2_in_1.type(torch.float32))
         # 用nocs代替
-        cd_loss1, _, _ = self.chamferloss(points_1_in_2_nocs, nocsBS_1)
-        cd_loss2, _, _ = self.chamferloss(points_2_in_1_nocs, nocsBS_2)
+        cd_loss1, _, _ = self.chamferloss(points_1_in_2_nocs.type(torch.float32), nocsBS_1.type(torch.float32))
+        cd_loss2, _, _ = self.chamferloss(points_2_in_1_nocs.type(torch.float32), nocsBS_2.type(torch.float32))
 
         # 1. Correspondence Loss
         # corr_loss_1 = self.get_corr_loss(points_1_in_2, points_1to2_gt)
         # corr_loss_2 = self.get_corr_loss(points_2_in_1, points_2to1_gt)
         # 用nocs代替
-        corr_loss_1 = self.get_corr_loss(points_1_in_2_nocs, nocsBS_1)
+        corr_loss_1 = self.get_corr_loss(points_1_in_2_nocs, nocsBS_1)  # 这样不对, 两帧NOCS的点并非是一一对应的
         corr_loss_2 = self.get_corr_loss(points_2_in_1_nocs, nocsBS_2)
 
         # 2. Regularization Loss
@@ -344,6 +344,25 @@ class Loss(nn.Module):
 
                 render_points_diff_color('before and after move assignmatrix', [points_2_, p1to2_gt.cpu().numpy(), p1in2.detach().cpu().numpy(), moved_p1in2.cpu().detach().numpy()],
                                          [color_gray, color_blue, color_green, color_red], save_img=False,
+                                         show_img=True)
+                render_points_diff_color('NOCS 1 && 2',
+                                         [nocsBS_2[0].cpu().detach().numpy(),
+                                          nocsBS_1[0].cpu().detach().numpy()],
+                                         [color_blue, color_red], save_img=False,
+                                         show_img=True)
+
+                show_diff_between_2_corr_pts(nocsBS_2[0].cpu().detach().numpy(),
+                                             nocsBS_1[0].cpu().detach().numpy())
+
+
+                render_points_diff_color('NOCS 1',
+                                         [points_1_in_2_nocs[0].cpu().detach().numpy(), nocsBS_1[0].cpu().detach().numpy()],
+                                         [color_blue, color_red], save_img=False,
+                                         show_img=True)
+
+                render_points_diff_color('NOCS 2',
+                                         [points_2_in_1_nocs[0].cpu().detach().numpy(), nocsBS_2[0].cpu().detach().numpy()],
+                                         [color_red, color_blue], save_img=False,
                                          show_img=True)
 
                 # 极端

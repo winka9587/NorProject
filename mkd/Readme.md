@@ -1160,19 +1160,113 @@ Mask是maskRCNN检测得到的...
 1. CD loss也要用nocs的点云来做, (讲道理,如果CD和SPD论文中描述的功能一样,
 那么它在理论上是不需要的)
 
-### 测试结果
+## 测试结果
+
+### 2倍权重
+
+<div class="img_group" style="text-align:center;">
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-4czkI7.png' width="100%" >
+<p  style="margin-top: 0">CDLoss</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-mYzZLU.png' width="100%" >
+<p style="margin-top: 0">CorrLoss</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-LQFoVu.png' width="100%" >
+<p style="margin-top: 0">EntropyLoss</p>
+</div>
+</div>
+
+### 5倍权重
+
+<div class="img_group" style="text-align:center;">
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-UWIZKz.png' width="100%" >
+<p  style="margin-top: 0">CDLoss</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-tpomQo.png' width="100%" >
+<p style="margin-top: 0">CorrLoss</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-nkv3BD.png' width="100%" >
+<p style="margin-top: 0">EntropyLoss</p>
+</div>
+</div>
+
+### 7倍权重
+
+<div class="img_group" style="text-align:center;">
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-MUmtw2.png' width="100%" >
+<p  style="margin-top: 0">CDLoss</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-jpVorE.png' width="100%" >
+<p style="margin-top: 0">CorrLoss</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-L7IT0n.png' width="100%" >
+<p style="margin-top: 0">EntropyLoss</p>
+</div>
+</div>
+
+### 10倍权重
+
+<div class="img_group" style="text-align:center;">
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-84VwNA.png' width="100%" >
+<p  style="margin-top: 0">CDLoss</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-WuglZV.png' width="100%" >
+<p style="margin-top: 0">CorrLoss</p>
+</div>
+<div class="sub_img" style="width:30%;display: inline-block;">
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-bYle5J.png' width="100%" >
+<p style="margin-top: 0">EntropyLoss</p>
+</div>
+</div>
+
+虽然曲线看起来收敛了, 但散开的程度还是不够
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-jY6Vyx.png' width="100%" >
+
+在NOCS上的可视化
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-O09YEI.png' width="100%" >
+
+两帧的NOCS
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-tC0Rz5.png' width="100%" >
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-v4lY0Y.png' width="100%" >
+
+用_coord图反投得到的点云nocs来计算Loss有一个问题，那就是CorrLoss怎么计算：
+
+之前，CorrLoss是通过 A1*pts1 在 第一帧的位置映射出一个和pts2相同的点云, 然后将pts2通过gt变换到1
+
+等等，这样也不能确保点与点时一一对应的啊。
+
+SPD中是怎么计算CorrLoss的？
+利用pts和nocs的一一对应关系。 但是我这因为是两帧之间的，所以无法构建一一对应关系。
+
+之前对assingmatrix的作用理解错了, 所以想出来一个 1in2 和 1to2_gt 计算CorrLoss的想法。
+
+现在呢？
+
+用nocs点云，如何确保点和点的映射关系？
+
+corr_loss_1 = self.get_corr_loss(points_1_in_2_nocs, nocsBS_1)  # 这样不对, 两帧NOCS的点并非是一一对应的
 
 
+问题：
 
+NOCS1和NOCS2并不是一一对应的
 
-
-
-
-
-
-
-
-
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-KQdIYg.png' width="100%" >
 
 
 
