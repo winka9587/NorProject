@@ -1261,16 +1261,24 @@ SPD中是怎么计算CorrLoss的？
 
 corr_loss_1 = self.get_corr_loss(points_1_in_2_nocs, nocsBS_1)  # 这样不对, 两帧NOCS的点并非是一一对应的
 
+错误的想法，本来就不应该是对应的，如果nocs1和2是对应的，那么观测点云的点也是对应的。那直接求位姿就行了还用什么网络。
+是因为对应矩阵A本来的作用就是通过学习特征得到点之间的权重，使得pts1中的第i个点乘以A之后，可以与pts2中的第j个点对应。
 
 问题：
 
-NOCS1和NOCS2并不是一一对应的
+NOCS1和NOCS2并不是一一对应的。有没有可能其之间存在一定规律让网络学习到了，比如大部分都是右斜。打乱nocs点的顺序试试。
 
 <img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-24-KQdIYg.png' width="100%" >
 
+解决方法, 将一个图的nocs点投影到另一个图上。但这样实际上是变相地计算了A的gt。
+
+有没有什么更方便的方法？
 
 
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-25-WiAgUC.png' width="100%" >
 
+
+### 删除CD Loss
 
 
 

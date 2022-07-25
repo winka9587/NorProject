@@ -226,8 +226,10 @@ class Loss(nn.Module):
         # cd_loss1, _, _ = self.chamferloss(points_1to2_gt.type(torch.float32).contiguous(), points_1_in_2.type(torch.float32))
         # cd_loss2, _, _ = self.chamferloss(points_2to1_gt.type(torch.float32).contiguous(), points_2_in_1.type(torch.float32))
         # 用nocs代替
-        cd_loss1, _, _ = self.chamferloss(points_1_in_2_nocs.type(torch.float32), nocsBS_1.type(torch.float32))
-        cd_loss2, _, _ = self.chamferloss(points_2_in_1_nocs.type(torch.float32), nocsBS_2.type(torch.float32))
+        # cd_loss1, _, _ = self.chamferloss(points_1_in_2_nocs.type(torch.float32), nocsBS_1.type(torch.float32))
+        # cd_loss2, _, _ = self.chamferloss(points_2_in_1_nocs.type(torch.float32), nocsBS_2.type(torch.float32))
+        cd_loss1 = 0
+        cd_loss2 = 0
 
         # 1. Correspondence Loss
         # corr_loss_1 = self.get_corr_loss(points_1_in_2, points_1to2_gt)
@@ -253,7 +255,7 @@ class Loss(nn.Module):
 
         total_loss = cd_loss1 + cd_loss2 + corr_loss_1 + corr_loss_2 + entropy_loss_1 + entropy_loss_2 + reciprocal_loss + entropy_loss_1v + entropy_loss_2v
 
-        viz_debug = True
+        viz_debug = False
         if viz_debug:
             # 测试及可视化代码
             # if debug:
@@ -291,6 +293,7 @@ class Loss(nn.Module):
                             idx = torch.argmin(tmp)
                             min_value = torch.min(tmp)
                             if min_value < 1:
+                                # 如果最小值太大也不管
                                 p_sort.append(p2_[idx])
                                 ref.append(idx)  # 记录与p2的对应，之后有可能用于比较assignmatrix
                         # 合并重排序后的点云，可能会有重复的点(有的点可能没有被选择)
@@ -345,25 +348,25 @@ class Loss(nn.Module):
                 render_points_diff_color('before and after move assignmatrix', [points_2_, p1to2_gt.cpu().numpy(), p1in2.detach().cpu().numpy(), moved_p1in2.cpu().detach().numpy()],
                                          [color_gray, color_blue, color_green, color_red], save_img=False,
                                          show_img=True)
-                render_points_diff_color('NOCS 1 && 2',
-                                         [nocsBS_2[0].cpu().detach().numpy(),
-                                          nocsBS_1[0].cpu().detach().numpy()],
-                                         [color_blue, color_red], save_img=False,
-                                         show_img=True)
+                # render_points_diff_color('NOCS 1 && 2',
+                #                          [nocsBS_2[0].cpu().detach().numpy(),
+                #                           nocsBS_1[0].cpu().detach().numpy()],
+                #                          [color_blue, color_red], save_img=False,
+                #                          show_img=True)
 
-                show_diff_between_2_corr_pts(nocsBS_2[0].cpu().detach().numpy(),
-                                             nocsBS_1[0].cpu().detach().numpy())
+                # show_diff_between_2_corr_pts(nocsBS_2[batch_idx].cpu().detach().numpy(),
+                #                              nocsBS_1[batch_idx].cpu().detach().numpy())
 
 
-                render_points_diff_color('NOCS 1',
-                                         [points_1_in_2_nocs[0].cpu().detach().numpy(), nocsBS_1[0].cpu().detach().numpy()],
-                                         [color_blue, color_red], save_img=False,
-                                         show_img=True)
-
-                render_points_diff_color('NOCS 2',
-                                         [points_2_in_1_nocs[0].cpu().detach().numpy(), nocsBS_2[0].cpu().detach().numpy()],
-                                         [color_red, color_blue], save_img=False,
-                                         show_img=True)
+                # render_points_diff_color('NOCS 1',
+                #                          [points_1_in_2_nocs[0].cpu().detach().numpy(), nocsBS_1[0].cpu().detach().numpy()],
+                #                          [color_blue, color_red], save_img=False,
+                #                          show_img=True)
+                #
+                # render_points_diff_color('NOCS 2',
+                #                          [points_2_in_1_nocs[0].cpu().detach().numpy(), nocsBS_2[0].cpu().detach().numpy()],
+                #                          [color_red, color_blue], save_img=False,
+                #                          show_img=True)
 
                 # 极端
                 # soft_assign_max = soft_assign_1.clone()[0]
