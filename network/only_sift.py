@@ -169,11 +169,11 @@ class SIFT_Track(nn.Module):
             self.cam_fx, self.cam_fy, self.cam_cx, self.cam_cy = 577.5, 577.5, 319.5, 239.5
 
         # SGPA
-        self.psp = PSPNet(bins=(1, 2, 3, 6), backend='resnet18')
         self.n_pts = 1024  # 从mask中采样1024个点，提取颜色特征
+        self.psp = PSPNet(bins=(1, 2, 3, 6), backend='resnet18')
         self.instance_geometry = Pointnet2MSG(0)
-        self.instance_rgbFeature = Pointnet2MSG(0)
-        self.instance_nrmFeature = Pointnet2MSG(0)
+        # self.instance_rgbFeature = Pointnet2MSG(0)
+        # self.instance_nrmFeature = Pointnet2MSG(0)
         self.instance_color = nn.Sequential(
             nn.Conv1d(32, 64, 1),
             nn.ReLU(),
@@ -185,6 +185,21 @@ class SIFT_Track(nn.Module):
             nn.ReLU(),
             nn.AdaptiveAvgPool1d(1),
         )
+        # 2
+        self.psp2 = PSPNet(bins=(1, 2, 3, 6), backend='resnet18')
+        self.instance_geometry2 = Pointnet2MSG(0)
+        self.instance_color2 = nn.Sequential(
+            nn.Conv1d(32, 64, 1),
+            nn.ReLU(),
+        )
+        self.instance_global2 = nn.Sequential(
+            nn.Conv1d(128, 128, 1),
+            nn.ReLU(),
+            nn.Conv1d(128, 1024, 1),
+            nn.ReLU(),
+            nn.AdaptiveAvgPool1d(1),
+        )
+        # assignment 输入 bs x 2176 x n_pts
         self.assignment = nn.Sequential(
             nn.Conv1d(2176, 512, 1),
             nn.ReLU(),
@@ -314,8 +329,8 @@ class SIFT_Track(nn.Module):
         # print((255 - output).sum())
         return output
 
-    # 有mask_add_from_last_frame说明是第二帧，需要使用前一帧提供的mask
-    def extract_3D_kp(self, frame, mask_bs):
+    # 有mask_bs说明是第二帧，需要使用前一帧提供的mask
+    def extract_3D_kp(self, frame, mask_bs, firstFrame=False):
         timer = Timer(True)
         # rgb                彩色图像               [bs, 3, h, w]
         # choose             应该是mask            [bs, 1, npts]
@@ -523,11 +538,14 @@ class SIFT_Track(nn.Module):
         timer.tick('go through batch and backproject pcd')
         # 提取几何特征
         points_feat_bs = points_feat_bs.type(torch.float32)  # points_feat_bs (bs, 1024, 3)
-        points_feat = self.instance_geometry(points_feat_bs[:, :, :3])  # points_feat (bs, 64, 1024)
+        if firstFrame:
+            points_feat = self.instance_geometry(points_feat_bs[:, :, :3])  # points_feat (bs, 64, 1024)
+        else:
+            points_feat = self.instance_geometry2(points_feat_bs[:, :, :3])  # points_feat (bs, 64, 1024)
 
         timer.tick('get geometry feature')
-        points_rgb_feat = self.instance_rgbFeature(points_feat_bs[:, :, 3:6])  # (bs, 64, 1024)
-        points_nrm_feat = self.instance_nrmFeature(points_feat_bs[:, :, 6:])  # (bs, 64, 1024)
+        # points_rgb_feat = self.instance_rgbFeature(points_feat_bs[:, :, 3:6])  # (bs, 64, 1024)
+        # points_nrm_feat = self.instance_nrmFeature(points_feat_bs[:, :, 6:])  # (bs, 64, 1024)
 
         # 图像输入PSP-Net, 提取RGB特征
         img_bs = torch.stack(img_bs, dim=0).cuda()  # convert list to tensor
@@ -537,7 +555,11 @@ class SIFT_Track(nn.Module):
         # problem: 这里绝对是可以继续优化的，因为后面choose会将没用的筛选掉，所以这里会计算很多没用CNN
 
         # (bs, 3, 192, 192) -> (bs, 32, 192, 192)
-        out_img = self.psp(img_bs)
+        if firstFrame:
+            out_img = self.psp(img_bs)
+        else:
+            out_img = self.psp2(img_bs)
+
         di = out_img.size()[1]  # 特征维度 32
         emb = out_img.view(bs, di, -1)  # 将一张图像的特征变成图像上每个像素点的
         timer.tick('get RGB feature CNN')
@@ -556,7 +578,10 @@ class SIFT_Track(nn.Module):
         # emb (bs, 64, n_pts)
         # emb (10, 64, 1024)
         # 1024个点的颜色特征，每个点的特征有64维
-        emb = self.instance_color(emb)
+        if firstFrame:
+            emb = self.instance_color(emb)
+        else:
+            emb = self.instance_color2(emb)
         timer.tick('get RGB feature sampling')
 
         # 至此已经得到了(bs, 64, 1024)的几何特征与(bs, 64, 1024)的颜色特征
@@ -568,7 +593,10 @@ class SIFT_Track(nn.Module):
         # 卷积结果替换为pointnet的结果
         # inst_local = torch.cat((points_feat, points_rgb_feat), dim=1)   # bs x (64+64) x 1024 -> bs x 128 x 1024
 
-        inst_global = self.instance_global(inst_local)      # bs x 1024 x 1
+        if firstFrame:
+            inst_global = self.instance_global(inst_local)      # bs x 1024 x 1
+        else:
+            inst_global = self.instance_global2(inst_local)  # bs x 1024 x 1
         timer.tick('get RGB feature concat')
         # 还需要做分割mask_for_next
         #
@@ -613,7 +641,7 @@ class SIFT_Track(nn.Module):
             # 提取第一帧的关键点
             print('extracting feature 1  ...')
             timer_extract_feat = Timer(True)
-            inst_local_1, inst_global_1, mask_bs_next, points_bs_1, points_origin_bs_1, nocsBS_1 = self.extract_3D_kp(last_frame, mask_last_frame)
+            inst_local_1, inst_global_1, mask_bs_next, points_bs_1, points_origin_bs_1, nocsBS_1 = self.extract_3D_kp(last_frame, mask_last_frame, firstFrame=True)
             timer_extract_feat.tick('extract feature 1 end')
 
             print('extracting feature 2  ...')

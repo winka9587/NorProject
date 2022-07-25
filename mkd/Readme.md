@@ -1280,6 +1280,14 @@ NOCS1和NOCS2并不是一一对应的。有没有可能其之间存在一定规律让网络学习到了，比如大
 
 ### 删除CD Loss
 
+并没有什么作用，删除CD后反而变回一条直线了
+
+### 两个不同的计算global特征网络
+
+观察SGPA时候发现，尽管instance_global和category_global结构是一样的，但是确实分别定义的。
+而且instance_geometry和category_local都是Pointnet2MSG
+
+<img src='https://raw.githubusercontent.com/winka9587/MD_imgs/main/Norproject/2022-07-25-Ho0XPb.png' width="100%" >
 
 
 

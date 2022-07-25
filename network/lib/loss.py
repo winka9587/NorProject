@@ -235,7 +235,7 @@ class Loss(nn.Module):
         # corr_loss_1 = self.get_corr_loss(points_1_in_2, points_1to2_gt)
         # corr_loss_2 = self.get_corr_loss(points_2_in_1, points_2to1_gt)
         # 用nocs代替
-        corr_loss_1 = self.get_corr_loss(points_1_in_2_nocs, nocsBS_1)  # 这样不对, 两帧NOCS的点并非是一一对应的
+        corr_loss_1 = self.get_corr_loss(points_1_in_2_nocs, nocsBS_1)
         corr_loss_2 = self.get_corr_loss(points_2_in_1_nocs, nocsBS_2)
 
         # 2. Regularization Loss
