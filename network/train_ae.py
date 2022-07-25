@@ -19,15 +19,15 @@ parser.add_argument('--CDLossTimes', type=float, default=1.0, help='')
 parser.add_argument('--CorrLossTimes', type=float, default=1.0, help='')
 parser.add_argument('--EntropyLossTimes', type=float, default=1.0, help='')
 parser.add_argument('--device_ids', type=str, default="3", help='choose device to run code')
-# parser.add_argument('--log_close', type=bool, default='False', help='use log or not')
-# parser.add_argument('--exp_name', type=str, default='NOCSNoCDLoss', help='name of this experiment')
-# parser.add_argument('--resume_model', type=str, default='', help='load model')
+parser.add_argument('--log_close', type=bool, default='False', help='use log or not')
+parser.add_argument('--exp_name', type=str, default='BioNet', help='name of this experiment')
+parser.add_argument('--resume_model', type=str, default='', help='load model')
 
 
 # 测试用
-parser.add_argument('--log_close', type=bool, default='True', help='name of this experiment')
-parser.add_argument('--exp_name', type=str, default='just test', help='name of this experiment')
-parser.add_argument('--resume_model', type=str, default='../results/Real/NOCSNoCDLoss-1.0-1.0-5.0-_model_cat1_04.pth', help='load model')
+# parser.add_argument('--log_close', type=bool, default='True', help='name of this experiment')
+# parser.add_argument('--exp_name', type=str, default='just test', help='name of this experiment')
+# parser.add_argument('--resume_model', type=str, default='../results/Real/NOCSNoCDLoss-1.0-1.0-5.0-_model_cat1_04.pth', help='load model')
 
 # backup
 # parser.add_argument('--log_close', type=bool, default='True', help='name of this experiment')
